@@ -10,7 +10,9 @@ mkpath(clones_dir)
 mkpath(static_dir)
 
 for depot in DEPOT_PATH
-    for reg_dir in readdir(joinpath(depot, "registries"), join=true)
+    depot_regs = joinpath(depot, "registries")
+    isdir(depot_regs) || continue
+    for reg_dir in readdir(depot_regs, join=true)
         isdir(reg_dir) || continue
         reg_file = joinpath(reg_dir, "Registry.toml")
         isfile(reg_file) || continue
