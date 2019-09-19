@@ -1,11 +1,12 @@
 #!/usr/bin/env julia
 
+clones_dir = "clones"
+static_dir = "static"
+get_old_package_artifacts = false
+
 import Pkg
 import Pkg.TOML
 import Pkg.Artifacts: download_artifact, artifact_path
-
-clones_dir = "clones"
-static_dir = "static"
 
 mkpath(clones_dir)
 mkpath(static_dir)
@@ -89,7 +90,7 @@ for depot in DEPOT_PATH
             for (ver, info) in versions
                 tree_hash = info["git-tree-sha1"]
                 tarball = joinpath(static_pkg_dir, tree_hash)
-                if !isfile(tarball)
+                if (new_tarball = !isfile(tarball))
                     clone_dir = joinpath(clones_dir, uuid)
                     try
                         pkg_repo = pkg_info["repo"]
@@ -115,6 +116,7 @@ for depot in DEPOT_PATH
                     end
                     isfile(tarball) || continue
                 end
+                new_tarball || get_old_package_artifacts || continue
                 # look for artifact files
                 for path in eachline(pipeline(`zstdcat $tarball`, `gtar -t`))
                     # NOTE: the above can't handle paths with newlines
