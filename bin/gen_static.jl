@@ -9,6 +9,8 @@ static_dir = "static"
 mkpath(clones_dir)
 mkpath(static_dir)
 
+registries = Dict{String,String}()
+
 for depot in DEPOT_PATH
     depot_regs = joinpath(depot, "registries")
     isdir(depot_regs) || continue
@@ -17,6 +19,17 @@ for depot in DEPOT_PATH
         reg_file = joinpath(reg_dir, "Registry.toml")
         isfile(reg_file) || continue
         reg_data = TOML.parsefile(reg_file)
+        # generate registry tarball
+        let tree_hash = readchomp(`git -C $reg_dir rev-parse HEAD`)
+            uuid = reg_data["uuid"]
+            tarball = joinpath(static_dir, "registry", uuid, tree_hash)
+            mkpath(dirname(tarball))
+            open(tarball, write=true) do io
+                git_archive = `git -C $reg_dir archive $tree_hash`
+                run(pipeline(git_archive, `zstd -9`, io))
+            end
+            registries[reg_data["uuid"]] = tree_hash
+        end
         for (uuid, info) in reg_data["packages"]
             name = info["name"]
             path = info["path"]
