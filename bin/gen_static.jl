@@ -72,3 +72,9 @@ for depot in DEPOT_PATH
         end
     end
 end
+
+open(joinpath(static_dir, "registries"), write=true) do io
+    for (uuid, tree_hash) in sort!(collect(registries))
+        println(io, "$uuid = ", repr(tree_hash))
+    end
+end
