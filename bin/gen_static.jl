@@ -1,6 +1,5 @@
 #!/usr/bin/env julia
 
-using UUIDs
 import Pkg.TOML
 
 clones_dir = "clones"
@@ -73,6 +72,7 @@ for depot in DEPOT_PATH
     end
 end
 
+# generate current registries file
 open(joinpath(static_dir, "registries"), write=true) do io
     for (uuid, tree_hash) in sort!(collect(registries))
         println(io, "$uuid = ", repr(tree_hash))
