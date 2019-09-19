@@ -23,26 +23,27 @@ for depot in DEPOT_PATH
             pkg_dir = joinpath(reg_dir, path)
             pkg_info = TOML.parsefile(joinpath(pkg_dir, "Package.toml"))
             versions = TOML.parsefile(joinpath(pkg_dir, "Versions.toml"))
-            # clone package repo
-            pkg_repo = pkg_info["repo"]
-            clone_dir = joinpath(clones_dir, uuid)
-            try
-                if !isdir(clone_dir)
-                    run(`git clone --mirror $pkg_repo $clone_dir`)
-                else
-                    run(`git -C $clone_dir remote update`)
-                end
-            catch err
-                @error err
-                continue
-            end
             # generate archive of each version
             static_pkg_dir = joinpath(static_dir, "package", uuid)
             mkpath(static_pkg_dir)
+            updated = false
             for (ver, info) in versions
                 tree_hash = info["git-tree-sha1"]
                 tarball = joinpath(static_pkg_dir, tree_hash)
                 isfile(tarball) && continue
+                clone_dir = joinpath(clones_dir, uuid)
+                try
+                    pkg_repo = pkg_info["repo"]
+                    if !isdir(clone_dir)
+                        run(`git clone --mirror $pkg_repo $clone_dir`)
+                    elseif !updated
+                        run(`git -C $clone_dir remote update`)
+                    end
+                    updated = true
+                catch err
+                    @error err
+                    break
+                end
                 try
                     open(tarball, write=true) do io
                         git_archive = `git -C $clone_dir archive $tree_hash`
