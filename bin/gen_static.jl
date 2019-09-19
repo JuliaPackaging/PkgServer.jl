@@ -144,6 +144,6 @@ end
 # generate current registries file
 open(joinpath(static_dir, "registries"), write=true) do io
     for (uuid, tree_hash) in sort!(collect(registries))
-        println(io, "$uuid = ", repr(tree_hash))
+        println(io, "/registry/$uuid/$tree_hash")
     end
 end
