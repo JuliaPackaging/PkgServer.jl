@@ -54,7 +54,7 @@ for depot in DEPOT_PATH
                     end
                     updated = true
                 catch err
-                    @error err
+                    println(stderr, "Cannot clone $name [$uuid]")
                     break
                 end
                 try
@@ -63,7 +63,7 @@ for depot in DEPOT_PATH
                         run(pipeline(git_archive, `zstd -9`, io))
                     end
                 catch err
-                    @error err
+                    println(stderr, "Cannot checkout $name [$uuid] @$tree_hash")
                     rm(tarball, force=true)
                     continue
                 end
