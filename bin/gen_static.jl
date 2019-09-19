@@ -12,6 +12,7 @@ mkpath(clones_dir)
 mkpath(static_dir)
 
 function process_artifact(info::Dict)
+    local input_path, output_path
     try
         tree_hash = info["git-tree-sha1"]
         tree_sha1 = Pkg.Types.SHA1(tree_hash)
@@ -24,36 +25,36 @@ function process_artifact(info::Dict)
             hash = download["sha256"]
             download_artifact(tree_sha1, url, hash, verbose=true) && break
         end
-        path = artifact_path(tree_sha1, honor_overrides=false)
-        isdir(path) || error("artifact install failed")
-        mkpath(dirname(output_path))
-        rel_paths = String[]
-        for (root, dirs, files) in walkdir(path)
-            rel_path = root != path ? relpath(root, path) : ""
-            for file in [dirs; files]
-                push!(rel_paths, joinpath(rel_path, file))
-            end
-        end
-        sort!(rel_paths)
-        open(output_path, write=true) do io
-            # reproducible tarball options based on
-            # http://h2.jaguarpaw.co.uk/posts/reproducible-tar/
-            tar_opts = ```
-                --format=posix
-                --numeric-owner
-                --owner=0
-                --group=0
-                --mode=ugo=rX
-                --mtime=1970-01-01
-                --pax-option=exthdr.name=%d/PaxHeaders/%f,delete=atime,delete=ctime,delete=mtime
-                --no-recursion
-            ```
-            run(pipeline(`gtar $tar_opts -cf - -C $path $rel_paths`, `zstd -9`, io))
-        end
-        # TODO: verify tarball git-tree-sha1
+        input_path = artifact_path(tree_sha1, honor_overrides=false)
+        isdir(input_path) || error("artifact install failed")
     catch err
         @warn err
     end
+    mkpath(dirname(output_path))
+    paths = String[]
+    for (root, dirs, files) in walkdir(input_path)
+        path = root != input_path ? relpath(root, input_path) : ""
+        for file in [dirs; files]
+            push!(paths, joinpath(path, file))
+        end
+    end
+    sort!(paths)
+    open(output_path, write=true) do io
+        # reproducible tarball options based on
+        # http://h2.jaguarpaw.co.uk/posts/reproducible-tar/
+        tar_opts = ```
+            --format=posix
+            --numeric-owner
+            --owner=0
+            --group=0
+            --mode=ugo=rX
+            --mtime=1970-01-01
+            --pax-option=exthdr.name=%d/PaxHeaders/%f,delete=atime,delete=ctime,delete=mtime
+            --no-recursion
+        ```
+        run(pipeline(`gtar $tar_opts -cf - -C $input_path $paths`, `zstd -9`, io))
+    end
+    # TODO: verify tarball git-tree-sha1
 end
 
 registries = Dict{String,String}()
