@@ -1,11 +1,13 @@
 module PkgServer
 
 using HTTP
+using Base.Threads: Event, @spawn
 
 const temp_dir = "temp"
 const cache_dir = "cache"
 
 cache(args...) = joinpath(cache_dir, args...)
+resource(args...) = "/$(join(args, "/"))"
 
 const REGISTRIES = [
     "23338594-aafe-5451-b93e-139f81909106",
@@ -18,11 +20,17 @@ const STORAGE_SERVERS = [
 sort!(REGISTRIES)
 sort!(STORAGE_SERVERS)
 
+const uuid_re = raw"[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}(?-i)"
+const hash_re = raw"[0-9a-f]{40}"
+const registry_re = Regex("^/registry/($uuid_re)/($hash_re)\$")
+const package_re  = Regex("^/package/($uuid_re)/($hash_re)\$")
+const artifact_re = Regex("^/artifact/($hash_re)\$")
+
 function get_registries(server::String)
     regs = Dict{String,String}()
     response = HTTP.get("$server/registries")
     for line in eachline(IOBuffer(response.body))
-        m = match(r"^/registry/([^/]+)/([^/]+)$", line)
+        m = match(registry_re, line)
         if m !== nothing
             uuid, hash = m.captures
             uuid in REGISTRIES || continue
@@ -66,9 +74,9 @@ function update_registries()
         for hash in hashes
             # try hashes known to fewest servers first, ergo newest
             servers = sort!(hash_info[hash])
-            # TODO: fetch("registry", uuid, hash, servers=servers) || continue
+            # fetch("registry", uuid, hash, servers=servers) !== nothing || continue
             if get(REGISTRY_HASHES, uuid, nothing) != hash
-                @info "new registry hash" uuid=uuid hash=hash servers=servers
+                @info "new current registry hash" uuid=uuid hash=hash servers=servers
                 changed = true
             end
             REGISTRY_HASHES[uuid] = hash
@@ -87,13 +95,96 @@ function update_registries()
     return changed
 end
 
+const fetch_locks = 1024
+const FETCH_SEED = rand(UInt)
+const FETCH_LOCKS = [ReentrantLock() for _ = 1:fetch_locks]
+const FETCH_FAILS = [Set{String}() for _ = 1:fetch_locks]
+const FETCH_DICTS = [Dict{String,Event}() for _ = 1:fetch_locks]
+
+function fetch(args::String...; servers=STORAGE_SERVERS)
+    res = resource(args...)
+    path = cache(args...)
+    isfile(path) && return path
+    isempty(servers) && throw(@error "fetch called with no servers" resource=res)
+    # make sure only one thread fetches path
+    i = (hash(path, FETCH_SEED) % fetch_locks) + 1
+    fetch_lock = FETCH_LOCKS[i]
+    lock(fetch_lock)
+    # check if this has failed to download recently
+    fetch_fails = FETCH_FAILS[i]
+    if res in fetch_fails
+        @debug "skipping recently failed download" resource=res
+        unlock(fetch_lock)
+        return nothing
+    end
+    # see if any other thread is already downloading
+    fetch_dict = FETCH_DICTS[i]
+    if path in keys(fetch_dict)
+        # another thread is already downloading path
+        @debug "waiting for in-progress download" resource=res
+        fetch_event = fetch_dict[path]
+        unlock(fetch_lock)
+        wait(fetch_event)
+        # TODO: try again if path doesn't exist?
+        return ispath(path) ? path : nothing
+    end
+    fetch_dict[path] = Event()
+    unlock(fetch_lock)
+    # this is the only thread fetching path
+    mkpath(dirname(path))
+    if length(servers) == 1
+        download(servers[1], res, path)
+    else
+        race_lock = ReentrantLock()
+        @sync for server in servers
+            @spawn begin
+                response = HTTP.head(server * res, status_exception = false)
+                if response.status == 200
+                    # the first thread to get here downloads
+                    if trylock(race_lock)
+                        download(server, res, path)
+                        unlock(race_lock)
+                    end
+                end
+            end
+        end
+    end
+    success = isfile(path)
+    success || @warn "download failed" resource=res
+    # notify other threads and remove from fetch dict
+    lock(fetch_lock)
+    success || push!(fetch_fails, res)
+    notify(pop!(fetch_dict, path))
+    unlock(fetch_lock)
+    # done at last
+    return success ? path : nothing
+end
+
+function forget_failures()
+    for i = 1:fetch_locks
+        fetch_lock = FETCH_LOCKS[i]
+        lock(fetch_lock)
+        empty!(FETCH_FAILS[i])
+        unlock(fetch_lock)
+    end
+end
+
+function download(server::String, res::String, path::String)
+    @info "downloading resource" server=server resource=res
+    mktemp(temp_dir) do temp_file, io
+        response = HTTP.get(server * res, status_exception = false, response_stream = io)
+        response.status == 200 && mv(temp_file, path, force=true)
+    end
+end
+
 function run()
     mkpath("temp")
     mkpath("cache")
     update_registries()
     @sync begin
-        @async while true
+        @spawn while true
             sleep(1)
+            forget_failures()
             update_registries()
         end
         # handle incoming requests
