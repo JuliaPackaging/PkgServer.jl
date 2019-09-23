@@ -6,9 +6,6 @@ using Base.Threads: Event, @spawn
 const temp_dir = "temp"
 const cache_dir = "cache"
 
-cache(args...) = joinpath(cache_dir, args...)
-resource(args...) = "/$(join(args, "/"))"
-
 const REGISTRIES = [
     "23338594-aafe-5451-b93e-139f81909106",
 ]
@@ -23,8 +20,12 @@ sort!(STORAGE_SERVERS)
 const uuid_re = raw"[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}(?-i)"
 const hash_re = raw"[0-9a-f]{40}"
 const registry_re = Regex("^/registry/($uuid_re)/($hash_re)\$")
-const package_re  = Regex("^/package/($uuid_re)/($hash_re)\$")
-const artifact_re = Regex("^/artifact/($hash_re)\$")
+const resource_re = Regex("""
+    ^/registries\$
+  | ^/registry/$uuid_re/$hash_re\$
+  | ^/package/$uuid_re/$hash_re\$
+  | ^/artifact/$hash_re\$
+""", "x")
 
 function get_registries(server::String)
     regs = Dict{String,String}()
@@ -74,7 +75,7 @@ function update_registries()
         for hash in hashes
             # try hashes known to fewest servers first, ergo newest
             servers = sort!(hash_info[hash])
-            # fetch("registry", uuid, hash, servers=servers) !== nothing || continue
+            fetch("/registry/$uuid/$hash", servers=servers) !== nothing || continue
             if get(REGISTRY_HASHES, uuid, nothing) != hash
                 @info "new current registry hash" uuid=uuid hash=hash servers=servers
                 changed = true
@@ -90,7 +91,7 @@ function update_registries()
             hash = REGISTRY_HASHES[uuid]
             println(io, "/registry/$uuid/$hash")
         end
-        mv(temp_file, cache("registries"), force=true)
+        mv(temp_file, joinpath(cache_dir, "registries"), force=true)
     end
     return changed
 end
@@ -101,19 +102,18 @@ const FETCH_LOCKS = [ReentrantLock() for _ = 1:fetch_locks]
 const FETCH_FAILS = [Set{String}() for _ = 1:fetch_locks]
 const FETCH_DICTS = [Dict{String,Event}() for _ = 1:fetch_locks]
 
-function fetch(args::String...; servers=STORAGE_SERVERS)
-    res = resource(args...)
-    path = cache(args...)
+function fetch(resource::String; servers=STORAGE_SERVERS)
+    path = cache_dir * resource
     isfile(path) && return path
-    isempty(servers) && throw(@error "fetch called with no servers" resource=res)
+    isempty(servers) && throw(@error "fetch called with no servers" resource=resource)
     # make sure only one thread fetches path
     i = (hash(path, FETCH_SEED) % fetch_locks) + 1
     fetch_lock = FETCH_LOCKS[i]
     lock(fetch_lock)
     # check if this has failed to download recently
     fetch_fails = FETCH_FAILS[i]
-    if res in fetch_fails
-        @debug "skipping recently failed download" resource=res
+    if resource in fetch_fails
+        @debug "skipping recently failed download" resource=resource
         unlock(fetch_lock)
         return nothing
     end
@@ -121,7 +121,7 @@ function fetch(args::String...; servers=STORAGE_SERVERS)
     fetch_dict = FETCH_DICTS[i]
     if path in keys(fetch_dict)
         # another thread is already downloading path
-        @debug "waiting for in-progress download" resource=res
+        @debug "waiting for in-progress download" resource=resource
         fetch_event = fetch_dict[path]
         unlock(fetch_lock)
         wait(fetch_event)
@@ -133,27 +133,28 @@ function fetch(args::String...; servers=STORAGE_SERVERS)
     # this is the only thread fetching path
     mkpath(dirname(path))
     if length(servers) == 1
-        download(servers[1], res, path)
+        download(servers[1], resource, path)
     else
         race_lock = ReentrantLock()
         @sync for server in servers
             @spawn begin
-                response = HTTP.head(server * res, status_exception = false)
+                response = HTTP.head(server * resource, status_exception = false)
                 if response.status == 200
                     # the first thread to get here downloads
                     if trylock(race_lock)
-                        download(server, res, path)
+                        download(server, resource, path)
                         unlock(race_lock)
                     end
                 end
+                # TODO: cancel any hung HEAD requests
             end
         end
     end
     success = isfile(path)
-    success || @warn "download failed" resource=res
+    success || @warn "download failed" resource=resource
     # notify other threads and remove from fetch dict
     lock(fetch_lock)
-    success || push!(fetch_fails, res)
+    success || push!(fetch_fails, resource)
     notify(pop!(fetch_dict, path))
     unlock(fetch_lock)
     # done at last
@@ -169,11 +170,18 @@ function forget_failures()
     end
 end
 
-function download(server::String, res::String, path::String)
-    @info "downloading resource" server=server resource=res
+function download(server::String, resource::String, path::String)
+    @info "downloading resource" server=server resource=resource
     mktemp(temp_dir) do temp_file, io
-        response = HTTP.get(server * res, status_exception = false, response_stream = io)
+        response = HTTP.get(server * resource, status_exception = false, response_stream = io)
         response.status == 200 && mv(temp_file, path, force=true)
+    end
+end
+
+function serve_file(http::HTTP.Stream, path::String)
+    open(path) do io
+        data = read(io, String)
+        write(http, data)
     end
 end
 
@@ -187,7 +195,19 @@ function run()
             forget_failures()
             update_registries()
         end
-        # handle incoming requests
+        @info "server listening"
+        HTTP.listen("127.0.0.1", 8000) do http
+            resource = http.message.target
+            if occursin(resource_re, resource)
+                path = fetch(resource)
+                if path !== nothing
+                    startwrite(http)
+                    serve_file(http, path)
+                    return
+                end
+            end
+            HTTP.setstatus(http, 404)
+        end
     end
 end
 
