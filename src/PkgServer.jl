@@ -18,20 +18,20 @@ const STORAGE_SERVERS = [
 sort!(REGISTRIES)
 sort!(STORAGE_SERVERS)
 
-function current_registries(server::String)
-    current = Dict{String,String}()
+function get_registries(server::String)
+    regs = Dict{String,String}()
     response = HTTP.get("$server/registries")
     for line in eachline(IOBuffer(response.body))
         m = match(r"^/registry/([^/]+)/([^/]+)$", line)
         if m !== nothing
             uuid, hash = m.captures
             uuid in REGISTRIES || continue
-            current[uuid] = hash
+            regs[uuid] = hash
         else
             @error "invalid response" server=server resource="/registries" line=line
         end
     end
-    return current
+    return regs
 end
 
 # current registry hashes and servers that know about them
@@ -45,7 +45,7 @@ function update_registries()
     regs = Dict(uuid => Dict{String,Vector{String}}() for uuid in REGISTRIES)
     servers = Dict(uuid => Vector{String}() for uuid in REGISTRIES)
     for server in STORAGE_SERVERS
-        for (uuid, hash) in current_registries(server)
+        for (uuid, hash) in get_registries(server)
             push!(get!(regs[uuid], hash, String[]), server)
             push!(servers[uuid], server)
         end
