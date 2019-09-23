@@ -28,7 +28,7 @@ function current_registries(server::String)
             uuid in REGISTRIES || continue
             current[uuid] = hash
         else
-            @error "invalid response" resource="/registries" server=server line=line
+            @error "invalid response" server=server resource="/registries" line=line
         end
     end
     return current
@@ -65,7 +65,7 @@ function update_registries()
         sort!(hashes, by = hash -> length(hash_info[hash]))
         for hash in hashes
             # try hashes known to fewest servers first, ergo newest
-            servers = hash_info[hash]
+            servers = sort!(hash_info[hash])
             # TODO: fetch("registry", uuid, hash, servers=servers) || continue
             if get(REGISTRY_HASHES, uuid, nothing) != hash
                 @info "new registry hash" uuid=uuid hash=hash servers=servers
