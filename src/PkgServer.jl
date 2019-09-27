@@ -1,5 +1,6 @@
 module PkgServer
 
+using Pkg
 using HTTP
 using Base.Threads: Event, @spawn
 
