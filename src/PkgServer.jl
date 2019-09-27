@@ -4,15 +4,15 @@ using Pkg
 using HTTP
 using Base.Threads: Event, @spawn
 
-const REGISTRIES = [
-    "23338594-aafe-5451-b93e-139f81909106",
-]
+const REGISTRIES = Dict(
+    "23338594-aafe-5451-b93e-139f81909106" =>
+        "https://github.com/JuliaRegistries/General",
+)
 const STORAGE_SERVERS = [
     "http://127.0.0.1:8080",
     "http://127.0.0.1:8081",
 ]
 
-sort!(REGISTRIES)
 sort!(STORAGE_SERVERS)
 
 const uuid_re = raw"[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}(?-i)"
@@ -32,7 +32,7 @@ function get_registries(server::String)
         m = match(registry_re, line)
         if m !== nothing
             uuid, hash = m.captures
-            uuid in REGISTRIES || continue
+            uuid in keys(REGISTRIES) || continue
             regs[uuid] = hash
         else
             @error "invalid response" server=server resource="/registries" line=line
@@ -41,16 +41,30 @@ function get_registries(server::String)
     return regs
 end
 
+const HTTP_HEADERS = [
+    "User-Agent" => "HTTP.jl/" *
+        string(Pkg.dependencies()[Base.PkgId(HTTP).uuid].version)
+]
+
+function url_exists(url::String)
+    response = HTTP.request("HEAD", url, HTTP_HEADERS, status_exception = false)
+    response.status == 200
+end
+
+function verify_registry_hash(uuid::String, hash::String)
+    repo = REGISTRIES[uuid]
+    url = Pkg.Operations.get_archive_url_for_version(repo, hash)
+    return url === nothing || url_exists(url)
+end
+
 # current registry hashes and servers that know about them
 const REGISTRY_HASHES = Dict{String,String}()
 const REGISTRY_SERVERS = Dict{String,Vector{String}}()
 
-url_exists(url::String) = HTTP.head(url, status_exception = false).status == 200
-
 function update_registries()
     # collect current registry hashes from servers
-    regs = Dict(uuid => Dict{String,Vector{String}}() for uuid in REGISTRIES)
-    servers = Dict(uuid => Vector{String}() for uuid in REGISTRIES)
+    regs = Dict(uuid => Dict{String,Vector{String}}() for uuid in keys(REGISTRIES))
+    servers = Dict(uuid => Vector{String}() for uuid in keys(REGISTRIES))
     for server in STORAGE_SERVERS
         for (uuid, hash) in get_registries(server)
             push!(get!(regs[uuid], hash, String[]), server)
@@ -71,6 +85,8 @@ function update_registries()
         hashes = sort!(collect(keys(hash_info)))
         sort!(hashes, by = hash -> length(hash_info[hash]))
         for hash in hashes
+            # first check if the origin repo knows about this hash
+            verify_registry_hash(uuid, hash) || continue
             # try hashes known to fewest servers first, ergo newest
             servers = sort!(hash_info[hash])
             fetch("/registry/$uuid/$hash", servers=servers) !== nothing || continue
@@ -85,7 +101,7 @@ function update_registries()
     end
     # write new registry info to file
     changed && mktemp("temp") do temp_file, io
-        for uuid in REGISTRIES
+        for uuid in sort!(collect(keys(REGISTRIES)))
             hash = REGISTRY_HASHES[uuid]
             println(io, "/registry/$uuid/$hash")
         end
