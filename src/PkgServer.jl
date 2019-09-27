@@ -157,6 +157,7 @@ function fetch(resource::String; servers=STORAGE_SERVERS)
                     # the first thread to get here downloads
                     if trylock(race_lock)
                         download(server, resource, path)
+                        # TODO: verify content
                         unlock(race_lock)
                     end
                 end

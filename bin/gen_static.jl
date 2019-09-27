@@ -39,20 +39,27 @@ function process_artifact(info::Dict)
         end
     end
     sort!(paths)
-    open(output_path, write=true) do io
-        # reproducible tarball options based on
-        # http://h2.jaguarpaw.co.uk/posts/reproducible-tar/
-        tar_opts = ```
-            --format=posix
-            --numeric-owner
-            --owner=0
-            --group=0
-            --mode=ugo=rX
-            --mtime=1970-01-01
-            --pax-option=exthdr.name=%d/PaxHeaders/%f,delete=atime,delete=ctime,delete=mtime
-            --no-recursion
-        ```
-        run(pipeline(`gtar $tar_opts -cf - -C $input_path $paths`, `zstd -9`, io))
+    mktemp() do paths_file, io
+        for path in paths
+            print(io, "$path\0")
+        end
+        close(io)
+        open(output_path, write=true) do io
+            # reproducible tarball options based on
+            # http://h2.jaguarpaw.co.uk/posts/reproducible-tar/
+            tar_opts = ```
+                --format=posix
+                --numeric-owner
+                --owner=0
+                --group=0
+                --mode=ugo=rX
+                --mtime=1970-01-01
+                --pax-option=exthdr.name=%d/PaxHeaders/%f,delete=atime,delete=ctime,delete=mtime
+                --no-recursion
+            ```
+            tar_cmd = `gtar $tar_opts -cf - -C $input_path --null -T $paths_file`
+            run(pipeline(tar_cmd, `zstd -9`, io))
+        end
     end
     # TODO: verify tarball git-tree-sha1
 end
