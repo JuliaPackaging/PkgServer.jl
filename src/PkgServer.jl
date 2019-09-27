@@ -3,9 +3,6 @@ module PkgServer
 using HTTP
 using Base.Threads: Event, @spawn
 
-const temp_dir = "temp"
-const cache_dir = "cache"
-
 const REGISTRIES = [
     "23338594-aafe-5451-b93e-139f81909106",
 ]
@@ -86,12 +83,12 @@ function update_registries()
         end
     end
     # write new registry info to file
-    changed && mktemp(temp_dir) do temp_file, io
+    changed && mktemp("temp") do temp_file, io
         for uuid in REGISTRIES
             hash = REGISTRY_HASHES[uuid]
             println(io, "/registry/$uuid/$hash")
         end
-        mv(temp_file, joinpath(cache_dir, "registries"), force=true)
+        mv(temp_file, joinpath("cache", "registries"), force=true)
     end
     return changed
 end
@@ -103,7 +100,7 @@ const FETCH_FAILS = [Set{String}() for _ = 1:fetch_locks]
 const FETCH_DICTS = [Dict{String,Event}() for _ = 1:fetch_locks]
 
 function fetch(resource::String; servers=STORAGE_SERVERS)
-    path = cache_dir * resource
+    path = "cache" * resource
     isfile(path) && return path
     isempty(servers) && throw(@error "fetch called with no servers" resource=resource)
     # make sure only one thread fetches path
@@ -172,7 +169,7 @@ end
 
 function download(server::String, resource::String, path::String)
     @info "downloading resource" server=server resource=resource
-    mktemp(temp_dir) do temp_file, io
+    mktemp("temp") do temp_file, io
         response = HTTP.get(server * resource, status_exception = false, response_stream = io)
         response.status == 200 && mv(temp_file, path, force=true)
     end
