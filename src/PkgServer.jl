@@ -3,15 +3,15 @@ module PkgServer
 using HTTP
 using Base.Threads: Event, @spawn
 
-const REGISTRIES = Dict(
-    "23338594-aafe-5451-b93e-139f81909106" =>
-        "https://github.com/JuliaRegistries/General.git",
-)
-
+const REGISTRIES = [
+    "23338594-aafe-5451-b93e-139f81909106",
+]
 const STORAGE_SERVERS = [
     "http://127.0.0.1:8080",
     "http://127.0.0.1:8081",
 ]
+
+sort!(REGISTRIES)
 sort!(STORAGE_SERVERS)
 
 const uuid_re = raw"[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}(?-i)"
@@ -24,42 +24,67 @@ const resource_re = Regex("""
   | ^/artifact/$hash_re\$
 """, "x")
 
-const REGISTRY_HASHES = Dict{String,String}()
+function get_registries(server::String)
+    regs = Dict{String,String}()
+    response = HTTP.get("$server/registries")
+    for line in eachline(IOBuffer(response.body))
+        m = match(registry_re, line)
+        if m !== nothing
+            uuid, hash = m.captures
+            uuid in REGISTRIES || continue
+            regs[uuid] = hash
+        else
+            @error "invalid response" server=server resource="/registries" line=line
+        end
+    end
+    return regs
+end
 
-git_cmd(args::Cmd; dir::Union{String,Nothing}=nothing) =
-    dir === nothing ? `git $args` : `git -C $dir $args`
-git(args::Cmd; dir::Union{String,Nothing}=nothing) =
-    run(pipeline(git_cmd(args, dir=dir), stdout=devnull, stderr=devnull))
+# current registry hashes and servers that know about them
+const REGISTRY_HASHES = Dict{String,String}()
+const REGISTRY_SERVERS = Dict{String,Vector{String}}()
+
+url_exists(url::String) = HTTP.head(url, status_exception = false).status == 200
 
 function update_registries()
+    # collect current registry hashes from servers
+    regs = Dict(uuid => Dict{String,Vector{String}}() for uuid in REGISTRIES)
+    servers = Dict(uuid => Vector{String}() for uuid in REGISTRIES)
+    for server in STORAGE_SERVERS
+        for (uuid, hash) in get_registries(server)
+            push!(get!(regs[uuid], hash, String[]), server)
+            push!(servers[uuid], server)
+        end
+    end
+    # for each hash check what other servers know about it
     changed = false
-    mkpath("registries")
-    for (uuid, repo) in REGISTRIES
-        dir = joinpath("registries", uuid)
-        if !isdir(dir)
-            try git(`clone -q --bare --single-branch --depth=1 $repo $dir`)
-            catch err
-                @error "Cannot clone registry" uuid=uuid repo=repo error=err
-                continue
-            end
-        else
-            try
-                git(`remote set-url origin $repo`, dir=dir)
-                git(`remote update`, dir=dir)
-            catch err
-                @error "Cannot update registry" uuid=uuid repo=repo error=err
-                continue
+    for (uuid, hash_info) in regs
+        isempty(hash_info) && continue # keep serving what we're serving
+        for (hash, hash_servers) in hash_info
+            for server in servers[uuid]
+                server in hash_servers && continue
+                url_exists("$server/registry/$uuid/$hash") || continue
+                push!(hash_servers, server)
             end
         end
-        hash = readchomp(git_cmd(`rev-parse 'HEAD^{tree}'`, dir=dir))
-        get(REGISTRY_HASHES, uuid, nothing) == hash && continue
-        @info "new current registry hash" uuid=uuid hash=hash
-        REGISTRY_HASHES[uuid] = hash
-        changed = true
+        hashes = sort!(collect(keys(hash_info)))
+        sort!(hashes, by = hash -> length(hash_info[hash]))
+        for hash in hashes
+            # try hashes known to fewest servers first, ergo newest
+            servers = sort!(hash_info[hash])
+            fetch("/registry/$uuid/$hash", servers=servers) !== nothing || continue
+            if get(REGISTRY_HASHES, uuid, nothing) != hash
+                @info "new current registry hash" uuid=uuid hash=hash servers=servers
+                changed = true
+            end
+            REGISTRY_HASHES[uuid] = hash
+            REGISTRY_SERVERS[uuid] = servers
+            break # we've got a new registry hash to server
+        end
     end
     # write new registry info to file
     changed && mktemp("temp") do temp_file, io
-        for uuid in keys(REGISTRIES)
+        for uuid in REGISTRIES
             hash = REGISTRY_HASHES[uuid]
             println(io, "/registry/$uuid/$hash")
         end
@@ -157,7 +182,7 @@ function serve_file(http::HTTP.Stream, path::String)
     end
 end
 
-function start()
+function run()
     mkpath("temp")
     mkpath("cache")
     update_registries()
