@@ -49,8 +49,8 @@ function url_exists(url::String)
 end
 
 function verify_registry_hash(uuid::String, hash::String)
-    repo = REGISTRIES[uuid]
-    url = Pkg.Operations.get_archive_url_for_version(repo, hash)
+    isfile(joinpath("cache", "registry", uuid, hash)) && return true
+    url = Pkg.Operations.get_archive_url_for_version(REGISTRIES[uuid], hash)
     return url === nothing || url_exists(url)
 end
 
