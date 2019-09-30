@@ -11,8 +11,19 @@ import Pkg.Artifacts: download_artifact, artifact_path
 mkpath(clones_dir)
 mkpath(static_dir)
 
+function verify_tarball_hash(hash::String, tarball::String)
+    local tree_hash
+    mktempdir() do tmp_dir
+        run(pipeline(`zstdcat $tarball`, `tar -C $tmp_dir -x -`))
+        tree_hash = bytes2hex(Pkg.GitTools.tree_hash(tmp_dir))
+        chmod(tmp_dir, 0o777, recursive=true)
+    end
+    tree_hash == hash || error("tree hash mismatch: $hash ≠ $tree_hash")
+    return nothing
+end
+
 function process_artifact(info::Dict)
-    local input_path, output_path
+    local tree_hash, input_path, output_path
     try
         tree_hash = info["git-tree-sha1"]
         tree_sha1 = Pkg.Types.SHA1(tree_hash)
@@ -61,7 +72,7 @@ function process_artifact(info::Dict)
             run(pipeline(tar_cmd, `zstd -9`, io))
         end
     end
-    # TODO: verify tarball git-tree-sha1
+    verify_tarball_hash(tree_hash, output_path)
 end
 
 registries = Dict{String,String}()
