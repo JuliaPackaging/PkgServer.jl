@@ -4,6 +4,8 @@ using Pkg
 using HTTP
 using Base.Threads: Event, @spawn
 
+HTTP.setuseragent!("PkgServer.jl/HTTP.jl")
+
 const REGISTRIES = Dict(
     "23338594-aafe-5451-b93e-139f81909106" =>
         "https://github.com/JuliaRegistries/General",
@@ -41,13 +43,8 @@ function get_registries(server::String)
     return regs
 end
 
-const HTTP_HEADERS = [
-    "User-Agent" => "HTTP.jl/" *
-        string(Pkg.dependencies()[Base.PkgId(HTTP).uuid].version)
-]
-
 function url_exists(url::String)
-    response = HTTP.request("HEAD", url, HTTP_HEADERS, status_exception = false)
+    response = HTTP.request("HEAD", url, status_exception = false)
     response.status == 200
 end
 
