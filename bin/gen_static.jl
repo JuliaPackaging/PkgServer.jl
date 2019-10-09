@@ -7,44 +7,31 @@ get_old_package_artifacts = false
 import Pkg
 import Pkg.TOML
 import Pkg.Artifacts: download_artifact, artifact_path
+import LibGit2
 
 mkpath(clones_dir)
 mkpath(static_dir)
 
-function verify_tarball_hash(hash::String, tarball::String)
-    local tree_hash
-    mktempdir() do tmp_dir
-        run(pipeline(`zstdcat $tarball`, `tar -C $tmp_dir -x -`))
-        tree_hash = bytes2hex(Pkg.GitTools.tree_hash(tmp_dir))
-        chmod(tmp_dir, 0o777, recursive=true)
-    end
-    tree_hash == hash || error("tree hash mismatch: $hash ≠ $tree_hash")
-    return nothing
-end
+const tar_opts = ```
+    --format=posix
+    --numeric-owner
+    --owner=0
+    --group=0
+    --mode=go-w,+X
+    --mtime=1970-01-01
+    --pax-option=exthdr.name=%d/PaxHeaders/%f,delete=atime,delete=ctime,delete=mtime
+    --no-recursion
+```
+# reproducible tarball options based on
+# http://h2.jaguarpaw.co.uk/posts/reproducible-tar/
 
-function process_artifact(info::Dict)
-    local tree_hash, input_path, output_path
-    try
-        tree_hash = info["git-tree-sha1"]
-        tree_sha1 = Pkg.Types.SHA1(tree_hash)
-        output_path = joinpath(static_dir, "artifact", tree_hash)
-        isfile(output_path) && return
-        downloads = info["download"]
-        downloads isa Array || (downloads = [downloads])
-        for download in downloads
-            url = download["url"]
-            hash = download["sha256"]
-            download_artifact(tree_sha1, url, hash, verbose=true) && break
-        end
-        input_path = artifact_path(tree_sha1, honor_overrides=false)
-        isdir(input_path) || error("artifact install failed")
-    catch err
-        @warn err
-    end
-    mkpath(dirname(output_path))
+function make_tarball(
+    tarball::AbstractString,
+    tree_path::AbstractString,
+)
     paths = String[]
-    for (root, dirs, files) in walkdir(input_path)
-        path = root != input_path ? relpath(root, input_path) : ""
+    for (root, dirs, files) in walkdir(tree_path)
+        path = root != tree_path ? relpath(root, tree_path) : ""
         for file in [dirs; files]
             push!(paths, joinpath(path, file))
         end
@@ -55,24 +42,73 @@ function process_artifact(info::Dict)
             print(io, "$path\0")
         end
         close(io)
-        open(output_path, write=true) do io
-            # reproducible tarball options based on
-            # http://h2.jaguarpaw.co.uk/posts/reproducible-tar/
-            tar_opts = ```
-                --format=posix
-                --numeric-owner
-                --owner=0
-                --group=0
-                --mode=ugo=rX
-                --mtime=1970-01-01
-                --pax-option=exthdr.name=%d/PaxHeaders/%f,delete=atime,delete=ctime,delete=mtime
-                --no-recursion
-            ```
-            tar_cmd = `gtar $tar_opts -cf - -C $input_path --null -T $paths_file`
+        open(tarball, write=true) do io
+            tar_cmd = `gtar $tar_opts -cf - -C $tree_path --null -T $paths_file`
             run(pipeline(tar_cmd, `zstd -9`, io))
         end
     end
-    verify_tarball_hash(tree_hash, output_path)
+    return
+end
+
+function create_git_tarball(
+    tarball::AbstractString,
+    repo_path::AbstractString,
+    tree_hash::AbstractString,
+)
+    repo = LibGit2.GitRepo(repo_path)
+    tree = LibGit2.GitObject(repo, tree_hash)
+    tree_path = mktempdir()
+    opts = LibGit2.CheckoutOptions(
+        checkout_strategy = LibGit2.Consts.CHECKOUT_FORCE,
+        target_directory = Base.unsafe_convert(Cstring, tree_path)
+    )
+    LibGit2.checkout_tree(repo, tree, options=opts)
+    make_tarball(tarball, tree_path)
+    verify_tarball_hash(tarball, tree_hash)
+    return
+end
+
+function verify_tarball_hash(
+    tarball::AbstractString,
+    tree_hash::AbstractString,
+)
+    local hash
+    mktempdir() do tmp_dir
+        run(pipeline(`zstdcat $tarball`, `tar -C $tmp_dir -x -`))
+        hash = bytes2hex(Pkg.GitTools.tree_hash(tmp_dir))
+        chmod(tmp_dir, 0o777, recursive=true)
+    end
+    hash == tree_hash || error("""
+        tree hash mismatch:
+        - expected: $tree_hash
+        - computed: $hash
+        """)
+    return
+end
+
+function process_artifact(info::Dict)
+    local tree_hash, tree_path, tarball
+    try
+        tree_hash = info["git-tree-sha1"]
+        tree_sha1 = Pkg.Types.SHA1(tree_hash)
+        tarball = joinpath(static_dir, "artifact", tree_hash)
+        isfile(tarball) && return
+        downloads = info["download"]
+        downloads isa Array || (downloads = [downloads])
+        for download in downloads
+            url = download["url"]
+            hash = download["sha256"]
+            download_artifact(tree_sha1, url, hash, verbose=true) && break
+        end
+        tree_path = artifact_path(tree_sha1, honor_overrides=false)
+        isdir(tree_path) || error("artifact install failed")
+    catch err
+        @warn err
+    end
+    mkpath(dirname(tarball))
+    make_tarball(tarball, tree_path)
+    verify_tarball_hash(tarball, tree_hash)
+    return
 end
 
 registries = Dict{String,String}()
@@ -86,14 +122,11 @@ for depot in DEPOT_PATH
         isfile(reg_file) || continue
         reg_data = TOML.parsefile(reg_file)
         # generate registry tarball
-        let tree_hash = readchomp(`git -C $reg_dir rev-parse HEAD`)
+        let tree_hash = readchomp(`git -C $reg_dir rev-parse 'HEAD^{tree}'`)
             uuid = reg_data["uuid"]
             tarball = joinpath(static_dir, "registry", uuid, tree_hash)
             mkpath(dirname(tarball))
-            open(tarball, write=true) do io
-                git_archive = `git -C $reg_dir archive $tree_hash`
-                run(pipeline(git_archive, `zstd -9`, io))
-            end
+            create_git_tarball(tarball, reg_dir, tree_hash)
             registries[reg_data["uuid"]] = tree_hash
         end
         for (uuid, info) in reg_data["packages"]
@@ -123,11 +156,7 @@ for depot in DEPOT_PATH
                         println(stderr, "Cannot clone $name [$uuid]")
                         break
                     end
-                    try
-                        open(tarball, write=true) do io
-                            git_archive = `git -C $clone_dir archive $tree_hash`
-                            run(pipeline(git_archive, `zstd -9`, io))
-                        end
+                    try create_git_tarball(tarball, clone_dir, tree_hash)
                     catch err
                         println(stderr, "Cannot checkout $name [$uuid] @$tree_hash")
                         rm(tarball, force=true)
