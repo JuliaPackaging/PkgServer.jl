@@ -26,6 +26,7 @@ const resource_re = Regex("""
   | ^/package/$uuid_re/$hash_re\$
   | ^/artifact/$hash_re\$
 """, "x")
+const hash_part_re = Regex("/($hash_re)\$")
 
 function get_registries(server::String)
     regs = Dict{String,String}()
@@ -154,7 +155,6 @@ function fetch(resource::String; servers=STORAGE_SERVERS)
                     # the first thread to get here downloads
                     if trylock(race_lock)
                         download(server, resource, path)
-                        # TODO: verify content
                         unlock(race_lock)
                     end
                 end
@@ -182,11 +182,36 @@ function forget_failures()
     end
 end
 
+function tarball_git_hash(tarball::String)
+    local tree_hash
+    mktempdir() do tmp_dir
+        run(pipeline(`zstdcat $tarball`, `tar -C $tmp_dir -x -`))
+        tree_hash = bytes2hex(Pkg.GitTools.tree_hash(tmp_dir))
+        chmod(tmp_dir, 0o777, recursive=true)
+    end
+    return tree_hash
+end
+
 function download(server::String, resource::String, path::String)
     @info "downloading resource" server=server resource=resource
+    hash = let m = match(hash_part_re, resource)
+        m !== nothing ? m.captures[1] : nothing
+    end
     mktemp("temp") do temp_file, io
-        response = HTTP.get(server * resource, status_exception = false, response_stream = io)
-        response.status == 200 && mv(temp_file, path, force=true)
+        response = HTTP.get(
+            status_exception = false,
+            response_stream = io,
+            server * resource,
+        )
+        close(io)
+        response.status == 200 || return
+        hash === nothing && return
+        tree_hash = tarball_git_hash(temp_file)
+        if hash == tree_hash
+            mv(temp_file, path, force=true)
+        else
+            @error "resource hash mismatch" server=server resource=resource hash=tree_hash
+        end
     end
 end
 
@@ -197,7 +222,7 @@ function serve_file(http::HTTP.Stream, path::String)
     end
 end
 
-function run()
+function start()
     mkpath("temp")
     mkpath("cache")
     update_registries()
