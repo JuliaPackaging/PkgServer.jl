@@ -12,9 +12,8 @@ const REGISTRIES = Dict(
 )
 const STORAGE_SERVERS = [
     "http://127.0.0.1:8080",
-    "http://127.0.0.1:8081",
+    # "http://127.0.0.1:8081",
 ]
-
 sort!(STORAGE_SERVERS)
 
 const uuid_re = raw"[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}(?-i)"
@@ -185,7 +184,7 @@ end
 function tarball_git_hash(tarball::String)
     local tree_hash
     mktempdir() do tmp_dir
-        run(pipeline(`zstdcat $tarball`, `tar -C $tmp_dir -x -`))
+        run(`tar -C $tmp_dir -zxf $tarball`)
         tree_hash = bytes2hex(Pkg.GitTools.tree_hash(tmp_dir))
         chmod(tmp_dir, 0o777, recursive=true)
     end

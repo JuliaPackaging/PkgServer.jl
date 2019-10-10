@@ -25,6 +25,9 @@ const tar_opts = ```
 # reproducible tarball options based on
 # http://h2.jaguarpaw.co.uk/posts/reproducible-tar/
 
+const compress = `gzip -9`
+const decompress = `gzcat`
+
 function make_tarball(
     tarball::AbstractString,
     tree_path::AbstractString,
@@ -44,7 +47,7 @@ function make_tarball(
         close(io)
         open(tarball, write=true) do io
             tar_cmd = `gtar $tar_opts -cf - -C $tree_path --null -T $paths_file`
-            run(pipeline(tar_cmd, `zstd -9`, io))
+            run(pipeline(tar_cmd, compress, io))
         end
     end
     return
@@ -74,7 +77,7 @@ function verify_tarball_hash(
 )
     local hash
     mktempdir() do tmp_dir
-        run(pipeline(`zstdcat $tarball`, `tar -C $tmp_dir -x -`))
+        run(pipeline(`$decompress $tarball`, `tar -C $tmp_dir -x -`))
         hash = bytes2hex(Pkg.GitTools.tree_hash(tmp_dir))
         chmod(tmp_dir, 0o777, recursive=true)
     end
@@ -166,11 +169,11 @@ for depot in DEPOT_PATH
                 end
                 new_tarball || get_old_package_artifacts || continue
                 # look for artifact files
-                for path in eachline(pipeline(`zstdcat $tarball`, `gtar -t`))
+                for path in eachline(pipeline(`$decompress $tarball`, `gtar -t`))
                     # NOTE: the above can't handle paths with newlines
                     # doesn't seem to be a way to get tar to use \0 instead
                     basename(path) in Pkg.Artifacts.artifact_names || continue
-                    extract = pipeline(`zstdcat $tarball`, `gtar -x -O $path`)
+                    extract = pipeline(`$decompress $tarball`, `gtar -x -O $path`)
                     artifacts = TOML.parse(read(extract, String))
                     for (key, val) in artifacts
                         if val isa Dict
