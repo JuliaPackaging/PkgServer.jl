@@ -141,33 +141,40 @@ for depot in DEPOT_PATH
             # generate archive of each version
             static_pkg_dir = joinpath(static_dir, "package", uuid)
             mkpath(static_pkg_dir)
+            clone_dir = joinpath(clones_dir, uuid)
             updated = false
+            if !isdir(clone_dir)
+                try run(`git clone --mirror $pkg_repo $clone_dir`)
+                catch err
+                    println(stderr, "Cannot clone $name [$uuid]")
+                    break
+                end
+                updated = true
+            end
             for (ver, info) in versions
                 tree_hash = info["git-tree-sha1"]
                 tarball = joinpath(static_pkg_dir, tree_hash)
-                if (new_tarball = !isfile(tarball))
-                    clone_dir = joinpath(clones_dir, uuid)
-                    try
-                        pkg_repo = pkg_info["repo"]
-                        if !isdir(clone_dir)
-                            run(`git clone --mirror $pkg_repo $clone_dir`)
-                        elseif !updated
-                            run(`git -C $clone_dir remote update`)
-                        end
-                        updated = true
-                    catch err
-                        println(stderr, "Cannot clone $name [$uuid]")
-                        break
-                    end
+                if (is_new_tarball = !isfile(tarball))
+                    pkg_repo = pkg_info["repo"]
+                    @label again
                     try create_git_tarball(tarball, clone_dir, tree_hash)
                     catch err
-                        println(stderr, "Cannot checkout $name [$uuid] @$tree_hash")
-                        rm(tarball, force=true)
-                        continue
+                        if updated
+                            println(stderr, "Cannot checkout $name [$uuid] $tree_hash")
+                            rm(tarball, force=true)
+                            continue
+                        end
+                        updated = true
+                        try run(`git -C $clone_dir remote update`)
+                        catch err
+                            println(stderr, "Cannot update $name [$uuid]")
+                            continue
+                        end
+                        @goto again
                     end
                     isfile(tarball) || continue
                 end
-                new_tarball || get_old_package_artifacts || continue
+                is_new_tarball || get_old_package_artifacts || continue
                 # look for artifact files
                 for path in eachline(pipeline(`$decompress $tarball`, `gtar -t`))
                     # NOTE: the above can't handle paths with newlines
