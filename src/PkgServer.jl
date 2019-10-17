@@ -243,6 +243,7 @@ function start()
                 end
             end
             HTTP.setstatus(http, 404)
+            startwrite(http)
         end
     end
 end
