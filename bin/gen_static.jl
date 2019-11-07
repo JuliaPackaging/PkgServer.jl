@@ -1,4 +1,5 @@
 #!/usr/bin/env julia
+using Dates
 
 clones_dir = "clones"
 static_dir = "static"
@@ -8,6 +9,8 @@ import Pkg
 import Pkg.TOML
 import Pkg.Artifacts: download_artifact, artifact_path
 import LibGit2
+
+Pkg.update()
 
 mkpath(clones_dir)
 mkpath(static_dir)
@@ -27,6 +30,12 @@ const tar_opts = ```
 
 const compress = `gzip -9`
 const decompress = `gzcat`
+
+function print_exception(e)
+    eio = IOBuffer()
+    Base.showerror(eio, e, catch_backtrace())
+    @error String(take!(eio))
+end
 
 function make_tarball(
     tarball::AbstractString,
@@ -77,7 +86,7 @@ function verify_tarball_hash(
 )
     local hash
     mktempdir() do tmp_dir
-        run(pipeline(`$decompress $tarball`, `tar -C $tmp_dir -x -`))
+        run(pipeline(`$decompress $tarball`, `tar -C $tmp_dir -x`))
         hash = bytes2hex(Pkg.GitTools.tree_hash(tmp_dir))
         chmod(tmp_dir, 0o777, recursive=true)
     end
@@ -119,6 +128,7 @@ registries = Dict{String,String}()
 for depot in DEPOT_PATH
     depot_regs = joinpath(depot, "registries")
     isdir(depot_regs) || continue
+    @info "Begin Sync...", string(DateTime(now()))
     for reg_dir in readdir(depot_regs, join=true)
         isdir(reg_dir) || continue
         reg_file = joinpath(reg_dir, "Registry.toml")
@@ -132,20 +142,54 @@ for depot in DEPOT_PATH
             create_git_tarball(tarball, reg_dir, tree_hash)
             registries[reg_data["uuid"]] = tree_hash
         end
+        total_packages = length(reg_data["packages"])
+        @debug "Packages to be processed:", total_packages
+        pc = 0
         for (uuid, info) in reg_data["packages"]
+            pc += 1
+            @debug "processing $(info["name"]) .. $pc/$total_packages"
             name = info["name"]
             path = info["path"]
             pkg_dir = joinpath(reg_dir, path)
             pkg_info = TOML.parsefile(joinpath(pkg_dir, "Package.toml"))
             versions = TOML.parsefile(joinpath(pkg_dir, "Versions.toml"))
+            pkg_repo = pkg_info["repo"]
             # generate archive of each version
             static_pkg_dir = joinpath(static_dir, "package", uuid)
-            mkpath(static_pkg_dir)
+            isdir(static_pkg_dir) || mkpath(static_pkg_dir)
             clone_dir = joinpath(clones_dir, uuid)
             updated = false
             if !isdir(clone_dir)
-                try run(`git clone --mirror $pkg_repo $clone_dir`)
+                try
+                   timeout_start = time()
+                   timeout = 720
+                   kill_timeout = 60
+                   process = run(`git clone --mirror $pkg_repo $clone_dir`, wait = false)
+                   is_clone_failure = false
+                   @info "($pc/$total_packages) Cloning in process...", name, pkg_repo
+                   while process_running(process)
+                       elapsed = (time() - timeout_start)
+                       if elapsed > timeout
+                           @warn("Terminating cloning $pkg_repo")
+                           kill(process)
+                           start_time = time()
+                           while process_running(process)
+                               @debug "waiting for process to terminate"
+                               if time() - start_time > kill_timeout
+                                   @debug("Killing $name")
+                                   sleep(1)
+                                   kill(process, Base.SIGKILL)
+                                   is_clone_failure = true
+                               end
+                           end
+                           @warn "Unable to clone $pkg_repo: skipping"
+                           is_clone_failure = true
+                       end
+                       sleep(1)
+                   end
+                   is_clone_failure && continue
                 catch err
+                    print_exception(err)
                     println(stderr, "Cannot clone $name [$uuid]")
                     break
                 end
@@ -196,6 +240,7 @@ for depot in DEPOT_PATH
             isempty(readdir(static_pkg_dir)) && rm(static_pkg_dir)
         end
     end
+    @debug "Sync completed", string(DateTime(now()))
 end
 
 # generate current registries file
