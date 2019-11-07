@@ -10,16 +10,10 @@ import Pkg.TOML
 import Pkg.Artifacts: download_artifact, artifact_path
 import LibGit2
 
+Pkg.update()
+
 mkpath(clones_dir)
 mkpath(static_dir)
-
-## for logging
-@async begin
-    while true
-        Base.flush(stdout)
-        sleep(1)
-    end
-end
 
 const tar_opts = ```
     --format=posix
