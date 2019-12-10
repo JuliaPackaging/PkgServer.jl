@@ -11,10 +11,12 @@ const REGISTRIES = Dict(
         "https://github.com/JuliaRegistries/General",
 )
 const STORAGE_SERVERS = [
-    "http://127.0.0.1:8080",
+    # "https://pkg.julialang.org"
+    # "http://127.0.0.1:8080",
     # "http://127.0.0.1:8081",
 ]
 sort!(STORAGE_SERVERS)
+register_storage_server(server_url) = push!(STORAGE_SERVERS, server_url)
 
 const uuid_re = raw"[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}(?-i)"
 const hash_re = raw"[0-9a-f]{40}"
@@ -215,13 +217,16 @@ function download(server::String, resource::String, path::String)
 end
 
 function serve_file(http::HTTP.Stream, path::String)
+    @info("serving", path)
     open(path) do io
         data = read(io, String)
         write(http, data)
     end
 end
 
-function start()
+authenticated(f, http, authmodule) = (authmodule === nothing) ? f() : authmodule.handle_authenticated(()->f(), http)
+function start(servername, serverport; authmodule=nothing)
+    refresh_url = "http://$servername:$serverport/auth/refresh"
     mkpath("temp")
     mkpath("cache")
     update_registries()
@@ -232,18 +237,30 @@ function start()
             update_registries()
         end
         @info "server listening"
-        HTTP.listen("127.0.0.1", 8000) do http
+        HTTP.listen(servername, serverport) do http
+            found = true
             resource = http.message.target
-            if occursin(resource_re, resource)
-                path = fetch(resource)
-                if path !== nothing
-                    startwrite(http)
-                    serve_file(http, path)
-                    return
+            if (resource == "/auth/issue") && (authmodule !== nothing)
+                authmodule.handle_authtoken_issue(http, refresh_url)
+            elseif (resource == "/auth/refresh") && (authmodule !== nothing)
+                authmodule.handle_authtoken_refresh(http, refresh_url)
+            elseif occursin(resource_re, resource)
+                found = authenticated(http, authmodule) do
+                    path = fetch(resource)
+                    found = (path !== nothing)
+                    if found
+                        startwrite(http)
+                        serve_file(http, path)
+                    end
+                    found
                 end
+            else
+                found = false
             end
-            HTTP.setstatus(http, 404)
-            startwrite(http)
+            if !found
+                HTTP.setstatus(http, 404)
+                startwrite(http)
+            end
         end
     end
 end
