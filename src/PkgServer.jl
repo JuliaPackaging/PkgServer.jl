@@ -11,9 +11,7 @@ const REGISTRIES = Dict(
         "https://github.com/JuliaRegistries/General",
 )
 const STORAGE_SERVERS = [
-    # "https://pkg.julialang.org"
-    # "http://127.0.0.1:8080",
-    # "http://127.0.0.1:8081",
+    "https://pkg.julialang.org"
 ]
 sort!(STORAGE_SERVERS)
 register_storage_server(server_url) = push!(STORAGE_SERVERS, server_url)
@@ -224,7 +222,9 @@ function serve_file(http::HTTP.Stream, path::String)
     end
 end
 
-authenticated(f, http, authmodule) = (authmodule === nothing) ? f() : authmodule.handle_authenticated(()->f(), http)
+authenticated(f, http, authmodule) =
+    (authmodule === nothing) ? f() : authmodule.handle_authenticated(()->f(), http)
+
 function start(servername, serverport; authmodule=nothing, sslconfig=nothing)
     refresh_url = "http://$servername:$serverport/auth/refresh"
     mkpath("temp")
@@ -236,7 +236,7 @@ function start(servername, serverport; authmodule=nothing, sslconfig=nothing)
             forget_failures()
             update_registries()
         end
-        @info("server listening", ssl=(sslconfig !== nothing))
+        @info("server listening", ssl=(sslconfig !== nothing), port=serverport)
         HTTP.listen(servername, serverport; sslconfig=sslconfig) do http
             found = true
             resource = http.message.target
