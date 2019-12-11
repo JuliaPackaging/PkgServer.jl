@@ -225,7 +225,7 @@ function serve_file(http::HTTP.Stream, path::String)
 end
 
 authenticated(f, http, authmodule) = (authmodule === nothing) ? f() : authmodule.handle_authenticated(()->f(), http)
-function start(servername, serverport; authmodule=nothing)
+function start(servername, serverport; authmodule=nothing, sslconfig=nothing)
     refresh_url = "http://$servername:$serverport/auth/refresh"
     mkpath("temp")
     mkpath("cache")
@@ -236,8 +236,8 @@ function start(servername, serverport; authmodule=nothing)
             forget_failures()
             update_registries()
         end
-        @info "server listening"
-        HTTP.listen(servername, serverport) do http
+        @info("server listening", ssl=(sslconfig !== nothing))
+        HTTP.listen(servername, serverport; sslconfig=sslconfig) do http
             found = true
             resource = http.message.target
             if (resource == "/auth/issue") && (authmodule !== nothing)
