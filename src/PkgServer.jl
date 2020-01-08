@@ -102,6 +102,7 @@ function update_registries()
             hash = REGISTRY_HASHES[uuid]
             println(io, "/registry/$uuid/$hash")
         end
+        close(io)
         mv(temp_file, joinpath("cache", "registries"), force=true)
     end
     return changed
