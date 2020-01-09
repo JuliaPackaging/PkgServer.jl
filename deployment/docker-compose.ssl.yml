@@ -18,6 +18,18 @@ services:
         volumes:
             - cache:/app/cache
 
+    webhook:
+        image: staticfloat/docker-webhook
+        volumes:
+            # Mount this very repository into /code
+            - ../:/code
+            # Mount the docker socket
+            - /var/run/docker.sock:/var/run/docker.sock
+        environment:
+            WEBHOOK_HOOKS_DIR: "/code/deployment/autoupdate"
+            WEBHOOK_SECRET: "${WEBHOOK_SECRET}"
+            WEBHOOK_BRANCH_LIST: "${CONFIG_BRANCH}"
+    
     frontend:
         build:
             context: frontend
@@ -31,5 +43,6 @@ services:
             - 443:443/tcp
         depends_on:
             - pkgserver
+            - webhook
 volumes:
     cache:
