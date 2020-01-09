@@ -238,8 +238,8 @@ function start(;host="127.0.0.1", port=8000)
             if occursin(resource_re, resource)
                 path = fetch(resource)
                 if path !== nothing
-                    setheader(http, "Content-Length" => string(filesize(path)))
-                    setheader(http, "Content-Encoding" => "gzip")
+                    HTTP.setheader(http, "Content-Length" => string(filesize(path)))
+                    HTTP.setheader(http, "Content-Encoding" => "gzip")
                     startwrite(http)
                     serve_file(http, path)
                     return

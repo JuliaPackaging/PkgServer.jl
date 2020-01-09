@@ -1,0 +1,35 @@
+version: '2'
+services:
+    pkgserver:
+        build:
+            # We tell it the build context is `..` because we
+            # actually want to copy the parent directory in so
+            # that we can `Pkg.add()` it during the build
+            context: ..
+            dockerfile: deployment/pkgserver/Dockerfile
+
+        restart: unless-stopped
+        expose:
+            - 8000
+        environment:
+            PKGSERVER_HOST: "0.0.0.0"
+            PKGSERVER_PORT: "8000"
+            PKGSERVER_STORAGESERVERS: "https://pkg.julialang.org"
+        volumes:
+            - cache:/app/cache
+
+    frontend:
+        build:
+            context: frontend
+            args:
+                FQDN: $FQDN
+        restart: unless-stopped
+        environment:
+            CERTBOT_EMAIL: $CERTBOT_EMAIL
+        ports:
+            - 80:80/tcp
+            - 443:443/tcp
+        depends_on:
+            - pkgserver
+volumes:
+    cache:
