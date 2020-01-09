@@ -25,6 +25,8 @@ services:
             - ../:/code
             # Mount the docker socket
             - /var/run/docker.sock:/var/run/docker.sock
+        ports:
+            - 8001:8000
         environment:
             WEBHOOK_HOOKS_DIR: "/code/deployment/autoupdate"
             WEBHOOK_SECRET: "${WEBHOOK_SECRET}"
