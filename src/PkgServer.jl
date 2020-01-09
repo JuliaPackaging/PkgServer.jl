@@ -222,7 +222,7 @@ function serve_file(http::HTTP.Stream, path::String)
     end
 end
 
-function start()
+function start(;host="127.0.0.1", port=8000)
     mkpath("temp")
     mkpath("cache")
     update_registries()
@@ -233,7 +233,7 @@ function start()
             update_registries()
         end
         @info "server listening"
-        HTTP.listen("127.0.0.1", 8000) do http
+        HTTP.listen(host, port) do http
             resource = http.message.target
             if occursin(resource_re, resource)
                 path = fetch(resource)
