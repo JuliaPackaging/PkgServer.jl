@@ -19,3 +19,6 @@ logs:
 
 down:
 	docker-compose down --remove-orphans
+
+destroy:
+	docker-compose down -v --remove-orphans

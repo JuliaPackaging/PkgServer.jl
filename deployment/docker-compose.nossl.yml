@@ -10,7 +10,7 @@ services:
 
         restart: unless-stopped
         ports:
-            - 80:8000
+            - 8000:8000
         environment:
             PKGSERVER_HOST: "0.0.0.0"
             PKGSERVER_PORT: "8000"
