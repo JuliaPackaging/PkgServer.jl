@@ -1,15 +1,17 @@
 #!/usr/bin/env julia
+
 using Dates
 
-clones_dir = "clones"
-static_dir = "static"
-get_old_package_artifacts = false
+const clones_dir = "clones"
+const static_dir = "static"
+const get_old_package_artifacts = false
 
 import Pkg
 import Pkg.TOML
 import Pkg.Artifacts: download_artifact, artifact_path
 import LibGit2
 
+# TODO: ensure all registries are git clones
 Pkg.update()
 
 mkpath(clones_dir)
@@ -76,7 +78,12 @@ function create_git_tarball(
     )
     LibGit2.checkout_tree(repo, tree, options=opts)
     make_tarball(tarball, tree_path)
-    verify_tarball_hash(tarball, tree_hash)
+    try
+        verify_tarball_hash(tarball, tree_hash)
+    catch err
+        @warn err repo_path=repo_path tarball=tarball
+        rm(tarball, force=true)
+    end
     return
 end
 
@@ -105,6 +112,7 @@ function process_artifact(info::Dict)
         tree_sha1 = Pkg.Types.SHA1(tree_hash)
         tarball = joinpath(static_dir, "artifact", tree_hash)
         isfile(tarball) && return
+        haskey(info, "download") || return
         downloads = info["download"]
         downloads isa Array || (downloads = [downloads])
         for download in downloads
@@ -119,7 +127,12 @@ function process_artifact(info::Dict)
     end
     mkpath(dirname(tarball))
     make_tarball(tarball, tree_path)
-    verify_tarball_hash(tarball, tree_hash)
+    try
+        verify_tarball_hash(tarball, tree_hash)
+    catch err
+        @warn err tree_path=tree_path tarball=tarball
+        rm(tarball, force=true)
+    end
     return
 end
 
