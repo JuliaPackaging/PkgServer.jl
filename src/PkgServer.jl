@@ -4,7 +4,7 @@ using Pkg
 using HTTP
 using Base.Threads: Event, @spawn
 
-HTTP.setuseragent!("PkgServer.jl/HTTP.jl")
+HTTP.setuseragent!("PkgServer (HTTP.jl)")
 
 const REGISTRIES = Dict(
     "23338594-aafe-5451-b93e-139f81909106" =>
@@ -238,6 +238,8 @@ function start(;host="127.0.0.1", port=8000)
             if occursin(resource_re, resource)
                 path = fetch(resource)
                 if path !== nothing
+                    setheader(http, "Content-Length" => string(filesize(path)))
+                    setheader(http, "Content-Encoding" => "gzip")
                     startwrite(http)
                     serve_file(http, path)
                     return
