@@ -3,6 +3,7 @@ module PkgServer
 using Pkg
 using HTTP
 using Base.Threads: Event, @spawn
+using Random
 
 HTTP.setuseragent!("PkgServer (HTTP.jl)")
 
@@ -41,6 +42,31 @@ function get_registries(server::String)
         end
     end
     return regs
+end
+
+
+"""
+    write_atomic(f::Function, path::String)
+
+Performs an atomic filesystem write by writing out to a file on the same
+filesystem as the given `path`, then `move()`'ing the file to its eventual
+destination.  Requires write access to the file and the containing folder.
+Currently stages changes at "<path>.tmp.<randstring>".  If the return value
+of `f()` is `false` or an exception is raised, the write will be aborted.
+"""
+function write_atomic(f::Function, path::String)
+    temp_file = path * ".tmp." * randstring()
+    try
+        retval = open(temp_file, "w") do io
+            f(temp_file, io)
+        end
+        if retval !== false
+            mv(temp_file, path; force=true)
+        end
+    catch e
+        rm(temp_file; force=true)
+        rethrow(e)
+    end
 end
 
 function url_exists(url::String)
@@ -97,13 +123,14 @@ function update_registries()
         end
     end
     # write new registry info to file
-    changed && mktemp("temp") do temp_file, io
-        for uuid in sort!(collect(keys(REGISTRIES)))
-            hash = REGISTRY_HASHES[uuid]
-            println(io, "/registry/$uuid/$hash")
+    if changed
+        write_atomic(joinpath("cache", "registries")) do temp_file, io
+            for uuid in sort!(collect(keys(REGISTRIES)))
+                hash = REGISTRY_HASHES[uuid]
+                println(io, "/registry/$uuid/$hash")
+            end
+            return true
         end
-        close(io)
-        mv(temp_file, joinpath("cache", "registries"), force=true)
     end
     return changed
 end
@@ -197,21 +224,30 @@ function download(server::String, resource::String, path::String)
     hash = let m = match(hash_part_re, resource)
         m !== nothing ? m.captures[1] : nothing
     end
-    mktemp("temp") do temp_file, io
+
+    write_atomic(path) do temp_file, io
         response = HTTP.get(
             status_exception = false,
             response_stream = io,
             server * resource,
         )
-        close(io)
-        response.status == 200 || return
-        hash === nothing && return
-        tree_hash = tarball_git_hash(temp_file)
-        if hash == tree_hash
-            mv(temp_file, path, force=true)
-        else
-            @error "resource hash mismatch" server=server resource=resource hash=tree_hash
+        # Raise warnings about bad HTTP response codes
+        if response.status != 200
+            @warn "response status $(response.status)"
+            return false
         end
+
+        # If we're given a hash, then check tarball git hash
+        if hash !== nothing
+            tree_hash = tarball_git_hash(temp_file)
+            # Raise warnings about resource hash mismatches
+            if hash != tree_hash
+                @warn "resource hash mismatch" server=server resource=resource hash=tree_hash
+                return false
+            end
+        end
+
+        return true
     end
 end
 
@@ -223,7 +259,6 @@ function serve_file(http::HTTP.Stream, path::String)
 end
 
 function start(;host="127.0.0.1", port=8000)
-    mkpath("temp")
     mkpath("cache")
     update_registries()
     @sync begin
