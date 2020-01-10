@@ -1,6 +1,7 @@
-# Default to deploying with SSL
-USE_SSL = 1
+# Default to deploying without SSL
+USE_SSL = 0
 
+# Decide which `docker-compose` file to use, depending on whether we're using SSL or not
 ifeq (1,$(USE_SSL))
 COMPOSE_FILE := docker-compose.ssl.yml
 else
