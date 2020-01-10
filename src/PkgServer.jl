@@ -13,7 +13,6 @@ const REGISTRIES = Dict(
 )
 const STORAGE_SERVERS = [
     "http://127.0.0.1:8080",
-    # "http://127.0.0.1:8081",
 ]
 sort!(STORAGE_SERVERS)
 
