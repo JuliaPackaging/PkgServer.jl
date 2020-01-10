@@ -17,6 +17,8 @@ if isempty(get(ENV, "JULIA_PKG_SERVER", "")) || isempty(get(ENV, "JULIA_PKG_SERV
     mktempdir() do temp_dir
         ENV["JULIA_PKG_SERVER"] = "http://127.0.0.1:8000"
         ENV["JULIA_PKG_SERVER_CACHE_DIR"] = joinpath(temp_dir, "cache")
+
+        @info("Auto-starting PkgServer on $(ENV["JULIA_PKG_SERVER"])")
         @async begin
             cd(temp_dir) do
                 PkgServer.start(;host="127.0.0.1", port=8000)
@@ -32,14 +34,18 @@ cache_dir = ENV["JULIA_PKG_SERVER_CACHE_DIR"]
 t_start = time()
 while true
     # Try to get an HTTP 200 OK on /registries
-    response = HTTP.get("$(server_url)/registries")
-    if response.status == 200
+    response_code = try
+        HTTP.get("$(server_url)/registries").status
+    catch
+    end
+
+    if response_code == 200
         break
     end
 
     # If we've been trying this for more than 10s, error out
     if (time() - t_start) >= 10
-        error("Unable to hit testing server at $(server_url)/registries, get HTTP $(response.status)")
+        error("Unable to hit testing server at $(server_url)/registries, get HTTP $(response_code)")
     end
 end
 

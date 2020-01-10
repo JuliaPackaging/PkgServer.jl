@@ -12,13 +12,13 @@ env:
 
 before_script:
     - cp deployment/.env.example deployment/.env
-    - if [ USE_DOCKER == 1 ]; then
+    - if [ USE_DOCKER = 1 ]; then
         make -C deployment up;
         export JULIA_PKG_SERVER="http://localhost:8000";
         export JULIA_PKG_SERVER_CACHE_DIR=$(pwd)/deployment/cache;
       fi
 
 after_script:
-    - if [ USE_DOCKER == 0 ]; then
+    - if [ USE_DOCKER = 0 ]; then
         make -C deployment destroy USE_SSL=0;
       fi
