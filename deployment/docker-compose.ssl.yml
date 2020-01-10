@@ -21,14 +21,14 @@ services:
     webhook:
         image: staticfloat/docker-webhook
         volumes:
-            # Mount this very repository into /code
-            - ../:/code
+            # Mount the update hook into /app/hooks, and our .env file into /app as well:
+            - ./autoupdate:/app/hooks:ro
+            - ./.env:/app/.env:ro
             # Mount the docker socket
             - /var/run/docker.sock:/var/run/docker.sock
         expose:
             - 8000
         environment:
-            WEBHOOK_HOOKS_DIR: "/code/deployment/autoupdate"
             WEBHOOK_SECRET: "${WEBHOOK_SECRET}"
             WEBHOOK_BRANCH_LIST: "${CONFIG_BRANCH}"
     

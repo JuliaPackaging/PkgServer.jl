@@ -11,6 +11,9 @@ export COMPOSE_FILE
 up:
 	docker-compose up --build --remove-orphans -d
 
+reload_pkgserver:
+	docker-compose up --build --remove-orphans -d pkgserver
+
 build:
 	docker-compose build --pull
 
