@@ -14,12 +14,12 @@ end
 # If these are not set, we will attempt to auto-initiate them.
 if isempty(get(ENV, "JULIA_PKG_SERVER", "")) || isempty(get(ENV, "JULIA_PKG_SERVER_CACHE_DIR", ""))
     # Start a background PkgServer
-    @async begin
-        mktempdir() do temp_dir
+    mktempdir() do temp_dir
+        ENV["JULIA_PKG_SERVER"] = "http://127.0.0.1:8000"
+        ENV["JULIA_PKG_SERVER_CACHE_DIR"] = joinpath(temp_dir, "cache")
+        @async begin
             cd(temp_dir) do
                 PkgServer.start(;host="127.0.0.1", port=8000)
-                ENV["JULIA_PKG_SERVER"] = "http://127.0.0.1:8000"
-                ENV["JULIA_PKG_SERVER_CACHE_DIR"] = joinpath(temp_dir, "cache")
             end
         end
     end
