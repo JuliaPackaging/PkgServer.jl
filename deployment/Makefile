@@ -8,6 +8,11 @@ COMPOSE_FILE := docker-compose.nossl.yml
 endif
 export COMPOSE_FILE
 
+
+# We want to launch/build docker containers as our own UID, so we collect that from the environment
+UID=$(shell id -u)
+export UID
+
 up:
 	docker-compose up --build --remove-orphans -d
 
