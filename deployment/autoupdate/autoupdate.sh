@@ -9,4 +9,7 @@ fi
 rm -rf /tmp/PkgServer.jl
 git clone -b "${BRANCH_NAME}" https://github.com/JuliaPackaging/PkgServer.jl /tmp/PkgServer.jl
 cd /tmp/PkgServer.jl/deployment
+
+# Copy in .env settings
+cp /app/.env .
 make reload_pkgserver
