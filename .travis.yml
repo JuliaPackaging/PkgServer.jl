@@ -1,0 +1,18 @@
+language: julia
+julia:
+  - nightly
+notifications:
+    email: false
+services:
+    - docker
+
+env:
+    - USE_DOCKER=0
+    - USE_DOCKER=1
+
+before_script:
+    - cp deployment/.env.example deployment/.env
+    - [[ USE_DOCKER == 1 ]] && make -C deployment up && export JULIA_PKG_SERVER="http://localhost:8000" JULIA_PKG_SERVER_CACHE_DIR=$(pwd)/deployment/cache
+
+after_script:
+    - [[USE_DOCKER == 0 ]] && make -C deployment destroy USE_SSL=0

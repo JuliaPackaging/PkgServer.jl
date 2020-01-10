@@ -1,2 +1,5 @@
 # Ignore local configuration setup
 .env
+
+# Ignore locally-mounted `cache` directory
+cache/

@@ -7,27 +7,30 @@ services:
             # that we can `Pkg.add()` it during the build
             context: ..
             dockerfile: deployment/pkgserver/Dockerfile
-
+            args:
+                UID: "${UID}"
         restart: unless-stopped
         expose:
             - 8000
+        volumes:
+            - ./cache:/app/cache
         environment:
             PKGSERVER_HOST: "0.0.0.0"
             PKGSERVER_PORT: "8000"
             PKGSERVER_STORAGESERVERS: "https://pkg.julialang.org"
-        volumes:
-            - cache:/app/cache
 
     webhook:
         image: staticfloat/docker-webhook
+        user: $UID
+        restart: unless-stopped
+        expose:
+            - 8000
         volumes:
             # Mount the update hook into /app/hooks, and our .env file into /app as well:
             - ./autoupdate:/app/hooks:ro
             - ./.env:/app/.env:ro
             # Mount the docker socket
             - /var/run/docker.sock:/var/run/docker.sock
-        expose:
-            - 8000
         environment:
             WEBHOOK_SECRET: "${WEBHOOK_SECRET}"
             WEBHOOK_BRANCH_LIST: "${CONFIG_BRANCH}"
@@ -46,5 +49,3 @@ services:
         depends_on:
             - pkgserver
             - webhook
-volumes:
-    cache:
