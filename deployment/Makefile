@@ -14,10 +14,13 @@ export COMPOSE_FILE
 UID=$(shell id -u)
 export UID
 
-up:
+up: cache
 	docker-compose up --build --remove-orphans -d
 
-reload_pkgserver:
+cache:
+	mkdir -p $@
+
+reload_pkgserver: cache
 	docker-compose up --build --remove-orphans -d pkgserver
 
 build:
