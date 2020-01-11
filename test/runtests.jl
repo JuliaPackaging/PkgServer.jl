@@ -63,7 +63,7 @@ while true
     sleep(0.2)
 end
 
-@testset "/registries" begin
+@testset "Direct HTTP requests" begin
     # Test that we get a sensical answer for /registries
     response = HTTP.get("$(server_url)/registries")
     @test response.status == 200
@@ -103,7 +103,8 @@ end
             Pkg.add(Pkg.PackageSpec(;name="Gtk", version=v"1.1.2"))
 
             # Install something with platform-independent artifacts, so that we can check the hashes
-            Pkg.add(Pkg.PackageSpec(;name="TestImages", version=v"1.0.0"))
+            Pkg.add(Pkg.PackageSpec(;name="DotNET", version=v"0.1.0"))
+            Pkg.add(Pkg.PackageSpec(;name="FIGlet", version=v"0.2.1"))
         end
     end
 
@@ -124,10 +125,10 @@ end
     end
 
     artifact_treehashes = [
-        # autumn_leaves.png
-        "cb84c2e2544f3517847d90c13cc11ab911fdbc5c",
-        # jetplane.tif
-        "db3f58645968c94ad801944efa760024cb5739dd",
+        # DotNET clrbridge
+        "5c005e142ebba033996dcc97b249e9e5ebcbf138",
+        # FIGlet fonts
+        "125ac0315d68bbb612f8c2189ea83401f73238f0",
     ]
     for treehash in artifact_treehashes
         @test isfile(joinpath(cache_dir, "artifact", treehash))
