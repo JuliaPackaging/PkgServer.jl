@@ -1,14 +1,8 @@
-version: '2'
+version: '3.3'
 services:
     pkgserver:
-        build:
-            # We tell it the build context is `..` because we
-            # actually want to copy the parent directory in so
-            # that we can `Pkg.add()` it during the build
-            context: ..
-            dockerfile: deployment/pkgserver/Dockerfile
-            args:
-                UID: "${UID}"
+        image: juliapackaging/pkgserver.jl
+        user: $UID
         restart: unless-stopped
         ports:
             - 8000:8000
@@ -18,19 +12,14 @@ services:
             PKGSERVER_HOST: "0.0.0.0"
             PKGSERVER_PORT: "8000"
             PKGSERVER_STORAGESERVERS: "https://pkg.julialang.org"
+        labels:
+            # Tell watchtower to auto-update this guy
+            com.centurylinklabs.watchtower.enable: true
 
-    webhook:
-        image: staticfloat/docker-webhook
-        user: $UID
-        restart: unless-stopped
-        ports:
-            - 8001:8000
+    # Auto-reload docker containers when their images are updated
+    watchtower:
+        image: containrrr/watchtower
         volumes:
-            # Mount the update hook into /app/hooks, and our .env file into /app as well:
-            - ./autoupdate:/app/hooks:ro
-            - ./.env:/app/.env:ro
             # Mount the docker socket
             - /var/run/docker.sock:/var/run/docker.sock
-        environment:
-            WEBHOOK_SECRET: "${WEBHOOK_SECRET}"
-            WEBHOOK_BRANCH_LIST: "${CONFIG_BRANCH}"
+        command: --cleanup --label-enable
