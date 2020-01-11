@@ -42,9 +42,9 @@ while true
         HTTP.get("$(server_url)/registries"; retry = false, readtimeout=1).status
     catch e
         # If it just can't connect, deal with it silently, otherwise rethrow
-        if isa(e, HTTP.IOExtras.IOError) && e.e.code == -61
-            # Return fake 500 status code, this doesn't really matter, just so long as it's not 200
-            500
+        if isa(e, HTTP.IOExtras.IOError) && e.e.code == -Base.Libc.ECONNREFUSED
+            # Return fake status code, this doesn't really matter, just so long as it's not 200
+            -Base.Libc.ECONNREFUSED
         else
             rethrow(e)
         end
