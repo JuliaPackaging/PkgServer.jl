@@ -99,6 +99,8 @@ end
 @testset "Package Installation" begin
     mktempdir() do temp_dir
         with_depot_path([temp_dir]) do
+            # Prevent `Pkg.add()` from changing PkgServer.jl's Project.toml
+            Pkg.activate(temp_dir)
             # Install something with a huge number of Package and Artifact dependencies
             Pkg.add(Pkg.PackageSpec(;name="Gtk", version=v"1.1.2"))
 
