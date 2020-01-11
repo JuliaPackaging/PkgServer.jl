@@ -29,6 +29,8 @@ services:
             - 443:443/tcp
         depends_on:
             - pkgserver
+        volumes:
+            - /etc/letsencrypt
 
     # Auto-reload docker containers when their images are updated
     watchtower:
