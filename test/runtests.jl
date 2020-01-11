@@ -99,8 +99,11 @@ end
 @testset "Package Installation" begin
     mktempdir() do temp_dir
         with_depot_path([temp_dir]) do
-            # Install something with a huge number of Package and Artiface dependencies
+            # Install something with a huge number of Package and Artifact dependencies
             Pkg.add(Pkg.PackageSpec(;name="Gtk", version=v"1.1.2"))
+
+            # Install something with platform-independent artifacts, so that we can check the hashes
+            Pkg.add(Pkg.PackageSpec(;name="TestImages", version=v"1.0.0"))
         end
     end
 
@@ -121,12 +124,10 @@ end
     end
 
     artifact_treehashes = [
-        # Adwaita theme
-        "17b6682b222ef6ff06805a6c674b00c68ddc8a9c",
-        # libgraphite2
-        "a40f51fd288579f98e42fd6f15a02a79ef2f148c",
-        # libgtk
-        "df170e77ddcd59c018c7abe5dddd5a7bcbf8b5eb",
+        # autumn_leaves.png
+        "cb84c2e2544f3517847d90c13cc11ab911fdbc5c",
+        # jetplane.tif
+        "db3f58645968c94ad801944efa760024cb5739dd",
     ]
     for treehash in artifact_treehashes
         @test isfile(joinpath(cache_dir, "artifact", treehash))
