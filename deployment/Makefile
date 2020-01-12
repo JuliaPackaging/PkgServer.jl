@@ -14,10 +14,12 @@ export COMPOSE_FILE
 UID=$(shell id -u)
 export UID
 
-up: cache
+up: cache logs/nginx
 	docker-compose up --remove-orphans -d
 
 cache:
+	mkdir -p $@
+logs/nginx:
 	mkdir -p $@
 
 # Do a manual build of the docker container
@@ -28,6 +30,7 @@ build:
 
 logs:
 	docker-compose logs -f --tail=100
+.PHONY: logs
 
 down:
 	docker-compose down --remove-orphans

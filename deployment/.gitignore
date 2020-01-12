@@ -1,5 +1,6 @@
 # Ignore local configuration setup
 .env
 
-# Ignore locally-mounted `cache` directory
+# Ignore locally-mounted `cache` and `logs` directories
 cache/
+logs/
