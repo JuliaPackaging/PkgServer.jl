@@ -15,7 +15,7 @@ UID=$(shell id -u)
 export UID
 
 up: cache logs/nginx
-	docker-compose up --remove-orphans -d
+	docker-compose up --build --remove-orphans -d
 
 cache:
 	mkdir -p $@

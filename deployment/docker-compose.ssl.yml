@@ -30,7 +30,7 @@ services:
         depends_on:
             - pkgserver
         volumes:
-            - /etc/letsencrypt
+            - letsencrypt:/etc/letsencrypt
             - ./logs/nginx:/logs
 
     # Auto-reload docker containers when their images are updated
@@ -41,3 +41,5 @@ services:
             - /var/run/docker.sock:/var/run/docker.sock
         command: --cleanup --label-enable
 
+volumes:
+    letsencrypt:
