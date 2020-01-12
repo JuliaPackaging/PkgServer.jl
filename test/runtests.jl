@@ -1,4 +1,4 @@
-using PkgServer, Pkg, HTTP
+using PkgServer, Pkg, HTTP, JSON
 using Test
 
 # You can either perform the following setup:
@@ -82,6 +82,13 @@ end
     # Verify that these files exist within the cache
     @test isfile(joinpath(cache_dir, "registries"))
     @test isfile(joinpath(cache_dir, "registry", registry_uuid, registry_treehash))
+
+    # Next, hit the `/meta` endpoint, ensure that the version it reports matches with what we expect:
+    response = HTTP.get("$(server_url)/meta")
+    @test response.status == 200
+    meta = JSON.parse(String(response.body))
+    @test haskey(meta, "pkgserver_version")
+    @test meta["pkgserver_version"] == PkgServer.get_pkgserver_version()
 end
 
 function with_depot_path(f::Function, dp::Vector{String})
@@ -135,6 +142,15 @@ end
     for treehash in artifact_treehashes
         @test isfile(joinpath(cache_dir, "artifact", treehash))
     end
+
+    # Ensure that, when we hit `/meta` now, the server knows that it has a bunch of packages and artifacts:
+    response = HTTP.get("$(server_url)/meta")
+    @test response.status == 200
+    meta = JSON.parse(String(response.body))
+    @test haskey(meta, "packages_cached")
+    @test meta["packages_cached"] >= 80
+    @test haskey(meta, "artifacts_cached")
+    @test meta["artifacts_cached"] >= 30
 end
 
 if server_process != nothing
