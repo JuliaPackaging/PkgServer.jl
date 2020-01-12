@@ -23,6 +23,7 @@ function get_num_hashnamed_files(dir)
     num_files = 0
     for f in readdir(dir)
         # only consider things with a name length that is exactly a tree-hash (filters out in-progress downloads, etc...)
+        # TODO: if we change hashes (e.g. SHA256), add that hash length here as well
         if length(f) != 40
             continue
         end
@@ -91,4 +92,3 @@ function serve_meta(http::HTTP.Stream)
     startwrite(http)
     write(http, metadata_json)
 end
-
