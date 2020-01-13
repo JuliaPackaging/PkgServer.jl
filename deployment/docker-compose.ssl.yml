@@ -17,21 +17,27 @@ services:
             com.centurylinklabs.watchtower.enable: true
     
     frontend:
-        build:
-            context: frontend
-            args:
-                FQDN: $FQDN
+        image: staticfloat/nginx-certbot
         restart: unless-stopped
         environment:
             CERTBOT_EMAIL: $CERTBOT_EMAIL
+            # Allow us to template the $FQDN value within the nginx config
+            FQDN: $FQDN
+            ENVSUBST_VARS: FQDN
         ports:
             - 80:80/tcp
             - 443:443/tcp
         depends_on:
             - pkgserver
         volumes:
+            # Mount in our nginx config
+            - ./nginx.conf:/etc/nginx/user.conf.d/${FQDN}.conf
+            # Keep SSL certificates permanently
             - letsencrypt:/etc/letsencrypt
+            # Store logs for us to peruse at our leisure
             - ./logs/nginx:/logs
+        labels:
+            com.centurylinklabs.watchtower.enable: true
 
     # Auto-reload docker containers when their images are updated
     watchtower:
