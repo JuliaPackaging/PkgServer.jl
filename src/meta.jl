@@ -88,7 +88,7 @@ function serve_meta(http::HTTP.Stream)
     )
 
     HTTP.setheader(http, "Content-Length" => string(length(metadata_json)))
-    HTTP.setheader(http, "Content-Encoding" => "application/json")
+    HTTP.setheader(http, "Content-Type" => "application/json")
     startwrite(http)
     write(http, metadata_json)
 end
