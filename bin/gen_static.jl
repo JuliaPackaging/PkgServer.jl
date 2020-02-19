@@ -71,18 +71,19 @@ function create_git_tarball(
 )
     repo = LibGit2.GitRepo(repo_path)
     tree = LibGit2.GitObject(repo, tree_hash)
-    tree_path = mktempdir()
-    opts = LibGit2.CheckoutOptions(
-        checkout_strategy = LibGit2.Consts.CHECKOUT_FORCE,
-        target_directory = Base.unsafe_convert(Cstring, tree_path)
-    )
-    LibGit2.checkout_tree(repo, tree, options=opts)
-    make_tarball(tarball, tree_path)
-    try
-        verify_tarball_hash(tarball, tree_hash)
-    catch err
-        @warn err repo_path=repo_path tarball=tarball
-        rm(tarball, force=true)
+    mktempdir() do tree_path
+        opts = LibGit2.CheckoutOptions(
+            checkout_strategy = LibGit2.Consts.CHECKOUT_FORCE,
+            target_directory = Base.unsafe_convert(Cstring, tree_path)
+        )
+        LibGit2.checkout_tree(repo, tree, options=opts)
+        make_tarball(tarball, tree_path)
+        try
+            verify_tarball_hash(tarball, tree_hash)
+        catch err
+            @warn err repo_path=repo_path tarball=tarball
+            rm(tarball, force=true)
+        end
     end
     return
 end
