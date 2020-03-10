@@ -133,6 +133,8 @@ function process_artifact(info::Dict)
     catch err
         @warn err tree_path=tree_path tarball=tarball
         rm(tarball, force=true)
+    finally
+        rm(tree_path, force=true, recursive=true)
     end
     return
 end
