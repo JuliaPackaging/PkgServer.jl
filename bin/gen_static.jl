@@ -11,9 +11,6 @@ import Pkg.TOML
 import Pkg.Artifacts: download_artifact, artifact_path
 import LibGit2
 
-# TODO: ensure all registries are git clones
-Pkg.update()
-
 mkpath(clones_dir)
 mkpath(static_dir)
 
