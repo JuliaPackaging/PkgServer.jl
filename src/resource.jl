@@ -104,14 +104,14 @@ function update_registries()
             # first check if the origin repo knows about this hash
             verify_registry_hash(uuid, hash) || continue
             # try hashes known to fewest servers first, ergo newest
-            servers = sort!(hash_info[hash])
-            fetch("/registry/$uuid/$hash", servers=servers) !== nothing || continue
+            hash_servers = sort!(hash_info[hash])
+            fetch("/registry/$uuid/$hash", servers=hash_servers) !== nothing || continue
             if get(REGISTRY_HASHES, uuid, nothing) != hash
-                @info "new current registry hash" uuid=uuid hash=hash servers=servers
+                @info "new current registry hash" uuid=uuid hash=hash servers=hash_servers
                 changed = true
             end
             REGISTRY_HASHES[uuid] = hash
-            REGISTRY_SERVERS[uuid] = servers
+            REGISTRY_SERVERS[uuid] = hash_servers
             break # we've got a new registry hash to server
         end
     end
