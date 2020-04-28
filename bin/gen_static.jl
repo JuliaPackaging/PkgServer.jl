@@ -1,6 +1,5 @@
 #!/usr/bin/env julia
 
-using Dates
 
 const clones_dir = "clones"
 const static_dir = "static"
@@ -11,12 +10,43 @@ import Pkg.TOML
 import Pkg.Artifacts: download_artifact, artifact_path
 import LibGit2
 import Tar
+using Dates
 
 mkpath(clones_dir)
 mkpath(static_dir)
 
-const compress = `gzip -9`
-const decompress = `gzcat`
+
+# TODO: get rid of these by using CodecZlib.jl, Tar.jl, etc...
+function choose_gzip_exe()
+    if Sys.which("gzip") !== nothing
+        return `gzip -9`
+    end
+    error("Must have `gzip` installed!")
+end
+
+function choose_zcat_exe()
+    # BSD vs. Linux
+    if Sys.which("gzcat") !== nothing
+        return `gzcat`
+    elseif Sys.which("zcat") !== nothing
+        return `zcat`
+    end
+    error("Must have `gzcat` or `zcat` installed!")
+end
+
+function choose_tar_exe()
+    # BSD vs. Linux
+    if Sys.which("gtar") !== nothing
+        return `gtar`
+    elseif Sys.which("tar") !== nothing
+        return `tar`
+    end
+    error("Must have `gtar` or `tar` installed!")
+end
+
+const gzip = choose_gzip_exe()
+const zcat = choose_zcat_exe()
+const tar_exe = choose_tar_exe()
 
 function print_exception(e)
     eio = IOBuffer()
@@ -29,7 +59,7 @@ function make_tarball(
     tree_path::AbstractString,
 )
     open(tarball, write=true) do io
-        open(pipeline(compress, io), write=true) do io
+        open(pipeline(gzip, io), write=true) do io
             Tar.create(tree_path, io)
         end
     end
@@ -65,7 +95,7 @@ function verify_tarball_hash(
 )
     local hash
     mktempdir() do tmp_dir
-        open(pipeline(tarball, decompress)) do io
+        open(pipeline(tarball, zcat)) do io
             Tar.extract(io, tmp_dir)
         end
         hash = bytes2hex(Pkg.GitTools.tree_hash(tmp_dir))
@@ -209,11 +239,11 @@ for depot in DEPOT_PATH
                 end
                 is_new_tarball || get_old_package_artifacts || continue
                 # look for artifact files
-                for path in eachline(pipeline(`$decompress $tarball`, `gtar -t`))
+                for path in eachline(pipeline(`$(zcat) $(tarball)`, `$(tar_exe) -t`))
                     # NOTE: the above can't handle paths with newlines
                     # doesn't seem to be a way to get tar to use \0 instead
                     basename(path) in Pkg.Artifacts.artifact_names || continue
-                    extract = pipeline(`$decompress $tarball`, `gtar -x -O $path`)
+                    extract = pipeline(`$(zcat) $(tarball)`, `$(tar_exe) -x -O $path`)
                     artifacts = TOML.parse(read(extract, String))
                     for (key, val) in artifacts
                         if val isa Dict
