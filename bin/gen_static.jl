@@ -1,11 +1,10 @@
 #!/usr/bin/env julia
 
-using Dates
-
 const clones_dir = "clones"
 const static_dir = "static"
 const get_old_package_artifacts = false
 
+import Dates: DateTime, now
 import Pkg
 import Pkg.TOML
 import Pkg.Artifacts: download_artifact, artifact_path
