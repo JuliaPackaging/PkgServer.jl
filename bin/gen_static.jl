@@ -7,7 +7,7 @@ const get_old_package_artifacts = false
 import Dates: DateTime, now
 import Pkg
 import Pkg.TOML
-import Pkg.Artifacts: download_artifact, artifact_path
+import Pkg.Artifacts: download_artifact, artifact_path, artifact_names
 import LibGit2
 import Tar
 
@@ -208,22 +208,35 @@ for depot in DEPOT_PATH
                 end
                 is_new_tarball || get_old_package_artifacts || continue
                 # look for artifact files
-                for path in eachline(pipeline(`$decompress $tarball`, `gtar -t`))
-                    # NOTE: the above can't handle paths with newlines
-                    # doesn't seem to be a way to get tar to use \0 instead
-                    basename(path) in Pkg.Artifacts.artifact_names || continue
-                    extract = pipeline(`$decompress $tarball`, `gtar -x -O $path`)
-                    artifacts = TOML.parse(read(extract, String))
-                    for (key, val) in artifacts
-                        if val isa Dict
-                            process_artifact(val)
-                        elseif val isa Vector
-                            foreach(process_artifact, val)
+                tmp_dir, paths = open(`$decompress $tarball`) do io
+                    paths = String[]
+                    Tar.extract(io) do hdr
+                        if split(hdr.path, '/')[end] in artifact_names
+                            push!(paths, hdr.path)
+                            return true
                         else
-                            @warn "invalid artifact file entry: $val"
+                            return false
                         end
+                    end, paths
+                end
+                for path in paths
+                    sys_path = joinpath(tmp_dir, path)
+                    try
+                        artifacts = TOML.parse(read(sys_path, String))
+                        for (key, val) in artifacts
+                            if val isa Dict
+                                process_artifact(val)
+                            elseif val isa Vector
+                                foreach(process_artifact, val)
+                            else
+                                @warn "invalid artifact file entry: $val" name path
+                            end
+                        end
+                    catch err
+                        @warn "error processing artifact file" error=err name path
                     end
                 end
+                rm(tmp_dir, recursive=true)
             end
             isempty(readdir(static_pkg_dir)) && rm(static_pkg_dir)
         end
