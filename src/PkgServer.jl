@@ -20,8 +20,12 @@ function start(;host="127.0.0.1", port=8000)
     @sync begin
         @spawn while true
             sleep(1)
-            forget_failures()
-            update_registries()
+            try
+                forget_failures()
+                update_registries()
+            catch e
+                @error("Registry update error: ", e)
+            end
         end
         @info "server listening on $(host):$(port)"
         HTTP.listen(host, port) do http
