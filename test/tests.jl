@@ -93,10 +93,7 @@ end
         # FIGlet
         "3064a664-84fe-4d92-92c7-ed492f3d8fae" => "bfc6b52f75b4720581e3e49ae786da6764e65b6a"
     ]
-    run(`ls -la $(cache_dir)/package/`)
     for (uuid, treehash) in pkg_uuid_treehashes
-        @show uuid, treehash
-        run(`ls -la $(cache_dir)/package/$(uuid)`)
         @test isfile(joinpath(cache_dir, "package", uuid, treehash))
     end
 
