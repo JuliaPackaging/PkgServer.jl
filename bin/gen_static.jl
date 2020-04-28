@@ -127,8 +127,10 @@ for depot in DEPOT_PATH
         let tree_hash = readchomp(`git -C $reg_dir rev-parse 'HEAD^{tree}'`)
             uuid = reg_data["uuid"]
             tarball = joinpath(static_dir, "registry", uuid, tree_hash)
-            mkpath(dirname(tarball))
-            create_git_tarball(tarball, reg_dir, tree_hash)
+            if !isfile(tarball)
+                mkpath(dirname(tarball))
+                create_git_tarball(tarball, reg_dir, tree_hash)
+            end
             registries[reg_data["uuid"]] = tree_hash
         end
         total_packages = length(reg_data["packages"])
