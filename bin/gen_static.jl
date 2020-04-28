@@ -10,25 +10,10 @@ import Pkg
 import Pkg.TOML
 import Pkg.Artifacts: download_artifact, artifact_path
 import LibGit2
-
-# TODO: ensure all registries are git clones
-Pkg.update()
+import Tar
 
 mkpath(clones_dir)
 mkpath(static_dir)
-
-const tar_opts = ```
-    --format=posix
-    --numeric-owner
-    --owner=0
-    --group=0
-    --mode=go-w,+X
-    --mtime=1970-01-01
-    --pax-option=exthdr.name=%d/PaxHeaders/%f,delete=atime,delete=ctime,delete=mtime
-    --no-recursion
-```
-# reproducible tarball options based on
-# http://h2.jaguarpaw.co.uk/posts/reproducible-tar/
 
 const compress = `gzip -9`
 const decompress = `gzcat`
@@ -43,25 +28,11 @@ function make_tarball(
     tarball::AbstractString,
     tree_path::AbstractString,
 )
-    paths = String[]
-    for (root, dirs, files) in walkdir(tree_path)
-        path = root != tree_path ? relpath(root, tree_path) : ""
-        for file in [dirs; files]
-            push!(paths, joinpath(path, file))
+    open(tarball, write=true) do io
+        open(pipeline(compress, io), write=true) do io
+            Tar.create(tree_path, io)
         end
     end
-    sort!(paths)
-    mktemp() do paths_file, io
-        for path in paths
-            print(io, "$path\0")
-        end
-        close(io)
-        open(tarball, write=true) do io
-            tar_cmd = `gtar $tar_opts -cf - -C $tree_path --null -T $paths_file`
-            run(pipeline(tar_cmd, compress, io))
-        end
-    end
-    return
 end
 
 function create_git_tarball(
@@ -94,7 +65,9 @@ function verify_tarball_hash(
 )
     local hash
     mktempdir() do tmp_dir
-        run(pipeline(`$decompress $tarball`, `tar -C $tmp_dir -x`))
+        open(pipeline(tarball, decompress)) do io
+            Tar.extract(io, tmp_dir)
+        end
         hash = bytes2hex(Pkg.GitTools.tree_hash(tmp_dir))
         chmod(tmp_dir, 0o777, recursive=true)
     end
