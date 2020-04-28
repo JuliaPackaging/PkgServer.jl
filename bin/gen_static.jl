@@ -10,12 +10,14 @@ import Pkg.TOML
 import Pkg.Artifacts: download_artifact, artifact_path, artifact_names
 import LibGit2
 import Tar
+import TranscodingStreams: TranscodingStream
+import CodecZlib: GzipCompressor, GzipDecompressor
 
 mkpath(clones_dir)
 mkpath(static_dir)
 
-const compress = `gzip -9`
-const decompress = `gzcat`
+compress(io::IO) = TranscodingStream(GzipCompressor(level=9), io)
+decompress(io::IO) = TranscodingStream(GzipDecompressor(), io)
 
 function print_exception(e)
     eio = IOBuffer()
@@ -28,10 +30,9 @@ function make_tarball(
     tree_path::AbstractString,
 )
     open(tarball, write=true) do io
-        open(pipeline(compress, io), write=true) do io
-            Tar.create(tree_path, io)
-        end
+        close(Tar.create(tree_path, compress(io)))
     end
+    return tarball
 end
 
 function create_git_tarball(
@@ -64,8 +65,8 @@ function verify_tarball_hash(
 )
     local hash
     mktempdir() do tmp_dir
-        open(pipeline(tarball, decompress)) do io
-            Tar.extract(io, tmp_dir)
+        open(tarball) do io
+            Tar.extract(decompress(io), tmp_dir)
         end
         hash = bytes2hex(Pkg.GitTools.tree_hash(tmp_dir))
         chmod(tmp_dir, 0o777, recursive=true)
@@ -208,9 +209,9 @@ for depot in DEPOT_PATH
                 end
                 is_new_tarball || get_old_package_artifacts || continue
                 # look for artifact files
-                tmp_dir, paths = open(`$decompress $tarball`) do io
+                tmp_dir, paths = open(tarball) do io
                     paths = String[]
-                    Tar.extract(io) do hdr
+                    Tar.extract(decompress(io)) do hdr
                         if split(hdr.path, '/')[end] in artifact_names
                             push!(paths, hdr.path)
                             return true
