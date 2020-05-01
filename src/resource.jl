@@ -21,6 +21,9 @@ const resource_re = Regex("""
 """, "x")
 const hash_part_re = Regex("/($hash_re)\$")
 
+compress(io::IO) = TranscodingStream(GzipCompressor(level=9), io)
+decompress(io::IO) = TranscodingStream(GzipDecompressor(), io)
+
 function get_registries(server::String)
     regs = Dict{String,String}()
     response = HTTP.get("$server/registries")
@@ -205,7 +208,9 @@ end
 function tarball_git_hash(tarball::String)
     local tree_hash
     mktempdir() do tmp_dir
-        run(`tar -C $tmp_dir -zxf $tarball`)
+        open(tarball) do io
+            Tar.extract(decompress(io), tmp_dir)
+        end
         tree_hash = bytes2hex(Pkg.GitTools.tree_hash(tmp_dir))
         chmod(tmp_dir, 0o777, recursive=true)
     end

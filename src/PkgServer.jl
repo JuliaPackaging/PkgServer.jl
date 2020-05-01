@@ -6,6 +6,10 @@ using Base.Threads: Event, @spawn
 using Random
 using LibGit2
 
+using Tar
+using TranscodingStreams: TranscodingStream
+using CodecZlib: GzipCompressor, GzipDecompressor
+
 include("resource.jl")
 include("meta.jl")
 
