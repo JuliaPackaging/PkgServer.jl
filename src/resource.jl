@@ -21,9 +21,6 @@ const resource_re = Regex("""
 """, "x")
 const hash_part_re = Regex("/($hash_re)\$")
 
-compress(io::IO) = TranscodingStream(GzipCompressor(level=9), io)
-decompress(io::IO) = TranscodingStream(GzipDecompressor(), io)
-
 function get_registries(server::String)
     regs = Dict{String,String}()
     response = HTTP.get("$server/registries")
