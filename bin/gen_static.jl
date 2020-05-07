@@ -69,7 +69,7 @@ function verify_tarball_hash(
             Tar.extract(decompress(io), tmp_dir)
         end
         hash = bytes2hex(Pkg.GitTools.tree_hash(tmp_dir))
-        chmod(tmp_dir, 0o777, recursive=true)
+        chmod(tmp_dir, 0o700, recursive=true)
     end
     hash == tree_hash || error("""
         tree hash mismatch:
@@ -107,6 +107,7 @@ function process_artifact(info::Dict)
         @warn err tree_path=tree_path tarball=tarball
         rm(tarball, force=true)
     finally
+        chmod(tree_path, 0o700, recursive=true)
         rm(tree_path, force=true, recursive=true)
     end
     return
@@ -239,6 +240,7 @@ for depot in DEPOT_PATH
                         @warn "error processing artifact file" error=err name path
                     end
                 end
+                chmod(tmp_dir, 0o700, recursive=true)
                 rm(tmp_dir, recursive=true)
             end
             isempty(readdir(static_pkg_dir)) && rm(static_pkg_dir)
