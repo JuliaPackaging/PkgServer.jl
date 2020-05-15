@@ -244,13 +244,25 @@ function download(server::String, resource::String, path::String)
     end
 end
 
-function serve_file(http::HTTP.Stream, path::String)
+function serve_file(http::HTTP.Stream, path::String, chunksize=2*1024*1024)
     HTTP.setheader(http, "Content-Length" => string(filesize(path)))
     # We assume that everything we send is gzip-compressed (since they're all tarballs)
     HTTP.setheader(http, "Content-Encoding" => "gzip")
     startwrite(http)
 
-    # Open the path, write it out directly to the HTTP stream
-    open(io -> write(http, read(io, String)), path)
+    # Open the path, write it out directly to the HTTP stream in chunks
+    chunkbuff = Array{UInt8}(undef, chunksize)
+    open(path) do io
+        bytes_left = filesize(io)
+        while bytes_left > chunksize
+            read!(io, chunkbuff)
+            write(http, chunkbuff)
+            bytes_left -= chunksize
+        end
+        if bytes_left > 0
+            lastchunk = view(chunkbuff, 1:bytes_left)
+            read!(io, lastchunk)
+            write(http, lastchunk)
+        end
+    end
 end
-
