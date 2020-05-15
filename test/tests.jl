@@ -112,7 +112,7 @@ end
     @test response.status == 200
     meta = JSON.parse(String(response.body))
     @test haskey(meta, "packages_cached")
-    @test meta["packages_cached"] >= 80
+    @test meta["packages_cached"] >= 70
     @test haskey(meta, "artifacts_cached")
     @test meta["artifacts_cached"] >= 30
 end
