@@ -115,6 +115,17 @@ end
 
 registries = Dict{String,String}()
 
+# These functions are very linux-only
+function getsid(pid::Cint)
+    return ccall(:getsid, Cint, (Cint,), pid)
+end
+getsid(p::Base.Process) = getsid(getpid(p))
+
+function killpg(pgid::Cint, sig=Base.SIGTERM)
+    return ccall(:killpg, Cint, (Cint, Cint), pgid, sig)
+end
+killpg(p::Base.Process, sig=Base.SIGTERM) = killpg(getsid(p), sig)
+
 for depot in DEPOT_PATH
     depot_regs = joinpath(depot, "registries")
     isdir(depot_regs) || continue
@@ -156,21 +167,23 @@ for depot in DEPOT_PATH
                    timeout_start = time()
                    timeout = 720
                    kill_timeout = 60
-                   process = run(`git clone --mirror $pkg_repo $clone_dir`, wait = false)
+                   # Run this process detached, so it gets its own process group
+                   process = run(detach(`git clone --mirror $pkg_repo $clone_dir`), wait = false)
+
                    is_clone_failure = false
                    @info "($pc/$total_packages) Cloning in process...", name, pkg_repo
                    while process_running(process)
                        elapsed = (time() - timeout_start)
                        if elapsed > timeout
                            @warn("Terminating cloning $pkg_repo")
-                           kill(process)
+                           killpg(process)
                            start_time = time()
                            while process_running(process)
                                @debug "waiting for process to terminate"
                                if time() - start_time > kill_timeout
                                    @debug("Killing $name")
                                    sleep(1)
-                                   kill(process, Base.SIGKILL)
+                                   killpg(process, Base.SIGKILL)
                                    is_clone_failure = true
                                end
                            end
