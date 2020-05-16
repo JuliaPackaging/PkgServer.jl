@@ -1,4 +1,4 @@
-FROM julia:1.3
+FROM julia:1.4
 
 # This Dockerfile must be built with a context of the top-level PkgServer.jl directory
 WORKDIR /app
