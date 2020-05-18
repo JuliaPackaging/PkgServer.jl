@@ -136,6 +136,7 @@ for depot in DEPOT_PATH
         isfile(reg_file) || continue
         reg_data = TOML.parsefile(reg_file)
         # generate registry tarball
+        run(`git -C $reg_dir pull`)
         let tree_hash = readchomp(`git -C $reg_dir rev-parse 'HEAD^{tree}'`)
             uuid = reg_data["uuid"]
             tarball = joinpath(static_dir, "registry", uuid, tree_hash)
