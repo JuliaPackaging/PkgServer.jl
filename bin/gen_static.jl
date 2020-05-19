@@ -97,6 +97,7 @@ function create_git_tarball(
         make_tarball(tarball, tree_path)
         try
             verify_tarball_hash(tarball, tree_hash)
+            clear_blacklist(tree_hash)
         catch err
             @warn err repo_path=repo_path tarball=tarball
             blacklist(tree_hash)
@@ -148,6 +149,8 @@ function process_artifact(info::Dict)
         if !isdir(tree_path)
             blacklist(tree_hash)
             error("artifact install failed")
+        else
+            clear_blacklist(tree_hash)
         end
     catch err
         @warn err
@@ -156,6 +159,7 @@ function process_artifact(info::Dict)
     make_tarball(tarball, tree_path)
     try
         verify_tarball_hash(tarball, tree_hash)
+        clear_blacklist(tree_hash)
     catch err
         @warn err tree_path=tree_path tarball=tarball
         blacklist(tree_hash)
