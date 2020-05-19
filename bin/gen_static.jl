@@ -4,9 +4,9 @@ const clones_dir = "clones"
 const static_dir = "static"
 const get_old_package_artifacts = false
 
-# Wait one week before attempting to download bad artifacts/packages again
+# Wait one day before attempting to download bad artifacts/packages again
 const blacklist_dir = "blacklist"
-const blacklist_timeout = 60*60*24*7
+const blacklist_timeout = 60*60*24*1
 
 import Dates: DateTime, now
 import Pkg
