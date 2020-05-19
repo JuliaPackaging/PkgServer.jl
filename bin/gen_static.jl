@@ -4,6 +4,10 @@ const clones_dir = "clones"
 const static_dir = "static"
 const get_old_package_artifacts = false
 
+# Wait one day before attempting to download bad artifacts/packages again
+const blacklist_dir = "blacklist"
+const blacklist_timeout = 60*60*24*1
+
 import Dates: DateTime, now
 import Pkg
 import Pkg.TOML
@@ -15,6 +19,7 @@ import CodecZlib: GzipCompressor, GzipDecompressor
 
 mkpath(clones_dir)
 mkpath(static_dir)
+mkpath(blacklist_dir)
 
 compress(io::IO) = TranscodingStream(GzipCompressor(level=9), io)
 decompress(io::IO) = TranscodingStream(GzipDecompressor(), io)
@@ -23,6 +28,43 @@ function print_exception(e)
     eio = IOBuffer()
     Base.showerror(eio, e, catch_backtrace())
     @error String(take!(eio))
+end
+
+function blacklist(args...)
+    black_path = joinpath(blacklist_dir, args...)
+    mkpath(dirname(black_path))
+    touch(black_path)
+end
+
+# Returns true if the file has been blacklisted and should not be downloaded
+function is_blacklisted(args...)
+    black_path = joinpath(blacklist_dir, args...)
+    st = stat(black_path)
+    if isfile(st) && mtime(st) > time() - blacklist_timeout
+        return true
+    end
+    return false
+end
+
+function prune_empty_blacklist_dirs(path)
+    if !isdir(path)
+        return
+    end
+    if abspath(path) == blacklist_dir
+        return
+    end
+    if isempty(readdir(path))
+        rm(path; force=true)
+        prune_empty_blacklist_dirs(dirname(path))
+    end
+end
+
+function clear_blacklist(args...)
+    black_path = joinpath(blacklist_dir, args...)
+    if isfile(black_path)
+        rm(black_path; force=true)
+        prune_empty_blacklist_dirs(dirname(black_path))
+    end
 end
 
 function make_tarball(
@@ -40,6 +82,10 @@ function create_git_tarball(
     repo_path::AbstractString,
     tree_hash::AbstractString,
 )
+    # If this download is blacklisted, don't even bother.
+    if is_blacklisted(tree_hash)
+        return
+    end
     repo = LibGit2.GitRepo(repo_path)
     tree = LibGit2.GitObject(repo, tree_hash)
     mktempdir() do tree_path
@@ -51,8 +97,10 @@ function create_git_tarball(
         make_tarball(tarball, tree_path)
         try
             verify_tarball_hash(tarball, tree_hash)
+            clear_blacklist(tree_hash)
         catch err
             @warn err repo_path=repo_path tarball=tarball
+            blacklist(tree_hash)
             rm(tarball, force=true)
         end
     end
@@ -83,6 +131,9 @@ function process_artifact(info::Dict)
     local tree_hash, tree_path, tarball
     try
         tree_hash = info["git-tree-sha1"]
+        if is_blacklisted(tree_hash)
+            return
+        end
         tree_sha1 = Pkg.Types.SHA1(tree_hash)
         tarball = joinpath(static_dir, "artifact", tree_hash)
         isfile(tarball) && return
@@ -95,7 +146,12 @@ function process_artifact(info::Dict)
             download_artifact(tree_sha1, url, hash, verbose=true) && break
         end
         tree_path = artifact_path(tree_sha1, honor_overrides=false)
-        isdir(tree_path) || error("artifact install failed")
+        if !isdir(tree_path)
+            blacklist(tree_hash)
+            error("artifact install failed")
+        else
+            clear_blacklist(tree_hash)
+        end
     catch err
         @warn err
     end
@@ -103,8 +159,10 @@ function process_artifact(info::Dict)
     make_tarball(tarball, tree_path)
     try
         verify_tarball_hash(tarball, tree_hash)
+        clear_blacklist(tree_hash)
     catch err
         @warn err tree_path=tree_path tarball=tarball
+        blacklist(tree_hash)
         rm(tarball, force=true)
     finally
         chmod(tree_path, 0o700, recursive=true)
@@ -203,6 +261,11 @@ for depot in DEPOT_PATH
             end
             for (ver, info) in versions
                 tree_hash = info["git-tree-sha1"]
+                # If this tree_hash is blacklisted, skip it.
+                if is_blacklisted(uuid, tree_hash)
+                    continue
+                end
+
                 tarball = joinpath(static_pkg_dir, tree_hash)
                 if (is_new_tarball = !isfile(tarball))
                     pkg_repo = pkg_info["repo"]
@@ -211,6 +274,7 @@ for depot in DEPOT_PATH
                     catch err
                         if updated
                             println(stderr, "Cannot checkout $name [$uuid] $tree_hash")
+                            blacklist(uuid, tree_hash)
                             rm(tarball, force=true)
                             continue
                         end
@@ -225,6 +289,9 @@ for depot in DEPOT_PATH
                     isfile(tarball) || continue
                 end
                 is_new_tarball || get_old_package_artifacts || continue
+                # Clear the blacklist on this treehash
+                clear_blacklist(uuid, tree_hash)
+
                 # look for artifact files
                 tmp_dir, paths = open(tarball) do io
                     paths = String[]
