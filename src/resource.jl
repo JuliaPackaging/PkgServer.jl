@@ -244,25 +244,29 @@ function download(server::String, resource::String, path::String)
     end
 end
 
-function serve_file(http::HTTP.Stream, path::String, chunksize=2*1024*1024)
-    HTTP.setheader(http, "Content-Length" => string(filesize(path)))
-    # We assume that everything we send is gzip-compressed (since they're all tarballs)
-    HTTP.setheader(http, "Content-Encoding" => "gzip")
+function serve_file(
+    http::HTTP.Stream,
+    path::String,
+    content_type::String,
+    content_encoding::String;
+    buffer::Vector{UInt8} = Vector{UInt8}(undef, 2*1024*1024),
+)
+    size = filesize(path)
+    HTTP.setheader(http, "Content-Length" => string(size))
+    HTTP.setheader(http, "Content-Type" => content_type)
+    content_encoding == "identity" ||
+        HTTP.setheader(http, "Content-Encoding" => content_encoding)
     startwrite(http)
 
     # Open the path, write it out directly to the HTTP stream in chunks
-    chunkbuff = Array{UInt8}(undef, chunksize)
     open(path) do io
-        bytes_left = filesize(io)
-        while bytes_left > chunksize
-            read!(io, chunkbuff)
-            write(http, chunkbuff)
-            bytes_left -= chunksize
+        t = 0
+        while !eof(io)
+            n = readbytes!(io, buffer)
+            t += write(http, view(buffer, 1:n))
         end
-        if bytes_left > 0
-            lastchunk = view(chunkbuff, 1:bytes_left)
-            read!(io, lastchunk)
-            write(http, lastchunk)
+        if t != size
+            @error "file size mismatch" path stat_size=size actual=t
         end
     end
 end

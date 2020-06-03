@@ -40,7 +40,10 @@ function start(;host="127.0.0.1", port=8000)
             if occursin(resource_re, resource)
                 path = fetch(resource)
                 if path !== nothing
-                    serve_file(http, path)
+                    content = resource == "/registries" ?
+                        ("application/toml", "identity") :
+                        ("application/tar",  "gzip")
+                    serve_file(http, path, content...)
                     return
                 end
             end
