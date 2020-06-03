@@ -40,10 +40,22 @@ function start(;host="127.0.0.1", port=8000)
             if occursin(resource_re, resource)
                 path = fetch(resource)
                 if path !== nothing
-                    serve_file(http, path)
+                    content = resource == "/registries" ?
+                        ("application/toml", "identity") :
+                        ("application/tar",  "gzip")
+                    serve_file(http, path, content...)
                     return
                 end
             end
+
+            if occursin(r"^/*$", resource)
+                path = joinpath(@__DIR__, "index.html")
+                if isfile(path)
+                    content = ("text/html", "identity")
+                    serve_file(http, path, content...)
+                end
+            end
+
             HTTP.setstatus(http, 404)
             startwrite(http)
         end

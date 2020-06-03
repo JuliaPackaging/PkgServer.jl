@@ -11,7 +11,7 @@ services:
         environment:
             PKGSERVER_HOST: "0.0.0.0"
             PKGSERVER_PORT: "8000"
-            PKGSERVER_STORAGESERVERS: "https://pkg.julialang.org"
+            PKGSERVER_STORAGESERVERS: "https://us-east.storage.julialang.org"
         labels:
             # Tell watchtower to auto-update this guy
             com.centurylinklabs.watchtower.enable: true
