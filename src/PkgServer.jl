@@ -47,6 +47,15 @@ function start(;host="127.0.0.1", port=8000)
                     return
                 end
             end
+
+            if occursin(r"^/*$", resource)
+                path = joinpath(@__DIR__, "index.html")
+                if isfile(path)
+                    content = ("text/html", "identity")
+                    serve_file(http, path, content...)
+                end
+            end
+
             HTTP.setstatus(http, 404)
             startwrite(http)
         end
