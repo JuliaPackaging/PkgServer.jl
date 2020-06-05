@@ -5,10 +5,14 @@ version = "0.1.0"
 
 [deps]
 CodecZlib = "944b1d66-785c-5afd-91f1-9de20f533193"
+FilesystemDatastructures = "89f0c457-83d8-4998-bfff-8b4a338c9833"
 HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
+JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
 LibGit2 = "76f85450-5226-5b5a-8eaa-529ad045b433"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
+StructTypes = "856f2bd8-1eba-4b0a-8007-ebc267875bd4"
 Tar = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
 TranscodingStreams = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
 
@@ -17,8 +21,7 @@ HTTP = "0.8"
 julia = "1.4"
 
 [extras]
-JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test", "JSON"]
+test = ["Test"]

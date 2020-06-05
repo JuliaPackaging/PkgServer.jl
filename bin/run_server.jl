@@ -1,11 +1,22 @@
 #!/usr/bin/env julia
+using PkgServer, Sockets
 
 # Accept optional environment-based arguments
-host = get(ENV, "PKGSERVER_HOST", "127.0.0.1")
-port = parse(Int, get(ENV, "PKGSERVER_PORT", "8000"))
-storage_servers = strip.(split(get(ENV, "PKGSERVER_STORAGESERVERS", "https://us-east.storage.julialang.org"), ","))
+# Eventually, do this via Pkg preferences
+pkgserver = get(ENV, "JULIA_PKG_SERVER", "http://0.0.0.0:8000")
+try
+    m = match(r"(https?://)?(.+):(\d+)", pkgserver)
+    global host = m.captures[2]
+    global port = parse(Int, m.captures[3])
+catch
+    error("Invalid JULIA_PKG_SERVER setting!")
+end
 
-using PkgServer
-empty!(PkgServer.STORAGE_SERVERS)
-append!(PkgServer.STORAGE_SERVERS, storage_servers)
-PkgServer.start(;host=host, port=port)
+storage_root = get(ENV, "JULIA_PKG_SERVER_STORAGE_ROOT", "/tmp/pkgserver")
+storage_servers = strip.(split(get(ENV, "JULIA_PKG_SERVER_STORAGE_SERVERS", "https://us-east.storage.julialang.org"), ","))
+
+PkgServer.start(;
+    listen_addr=Sockets.InetAddr(host, port),
+    storage_root=storage_root,
+    storage_servers=storage_servers,
+)
