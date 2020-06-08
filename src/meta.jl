@@ -39,21 +39,22 @@ function get_num_hashnamed_files(dir)
     return num_files
 end
 
-function get_num_pkgs_cached(cache_dir)
+function get_num_pkgs_cached()
+    cache_root = config.cache.root
     # If we don't even have a `package` directory, then don't worry about it
-    if !isdir(joinpath(cache_dir, "package"))
+    if !isdir(joinpath(cache_root, "package"))
         return 0
     end
 
     num_pkgs_cached = 0
-    for d in readdir(joinpath(cache_dir, "package"))
+    for d in readdir(joinpath(cache_root, "package"))
         # Only consider things with a name that is exactly a UUID (filters out in-progress downloads, etc...)
         if length(d) != 36
             continue
         end
 
         # Only consider directories
-        pkg_dir = joinpath(cache_dir, "package", d)
+        pkg_dir = joinpath(cache_root, "package", d)
         if !isdir(pkg_dir)
             continue
         end
@@ -63,32 +64,35 @@ function get_num_pkgs_cached(cache_dir)
     return num_pkgs_cached
 end
 
-function get_num_artifacts_cached(cache_dir)
-    num_artifacts_cached = get_num_hashnamed_files(joinpath(cache_dir, "artifact"))
+function get_num_artifacts_cached()
+    num_artifacts_cached = get_num_hashnamed_files(joinpath(config.cache.root, "artifact"))
+end
+
+function serve_json(http::HTTP.Stream, data::Dict)
+    json = JSON3.write(data)
+    HTTP.setheader(http, "Content-Length" => string(length(json)))
+    HTTP.setheader(http, "Content-Type" => "application/json")
+    startwrite(http)
+    return write(http, json)
 end
 
 function serve_meta(http::HTTP.Stream)
-    # Get a count of how many things we've cached
-    num_pkgs = get_num_pkgs_cached("cache")
-    num_artifacts = get_num_artifacts_cached("cache")
-
     # We serve a JSON representation of some metadata about this PkgServer
     metadata = Dict(
         "pkgserver_version" => pkgserver_version,
         "julia_version" => string(VERSION),
-        "packages_cached" => num_pkgs,
-        "artifacts_cached" => num_artifacts,
     )
+    return serve_json(http, metadata)
+end
 
-    # We generate an extremely simple subset of JSON here
-    metadata_json = string(
-        "{",
-        join(["$(repr(k)): $(repr(v))" for (k, v) in metadata], ","),
-        "}",
+# Because we need to JSON-serialize cache entries, we must define the serialization strategy
+StructTypes.StructType(::Type{FilesystemDatastructures.CacheEntry}) = StructTypes.Struct()
+function serve_meta_stats(http::HTTP.Stream)
+    # Serve a JSON representation of the top 100 most commonly requested resources
+    stats = Dict(
+        "lru" => config.cache.entries,
+        "packages_cached" => get_num_pkgs_cached(),
+        "artifacts_cached" => get_num_artifacts_cached(),
     )
-
-    HTTP.setheader(http, "Content-Length" => string(length(metadata_json)))
-    HTTP.setheader(http, "Content-Type" => "application/json")
-    startwrite(http)
-    write(http, metadata_json)
+    return serve_json(http, stats)
 end

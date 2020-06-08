@@ -45,13 +45,13 @@ end
     end
 
     # Verify that these files exist within the cache
-    @test isfile(joinpath(cache_dir, "registries"))
+    @test isfile(joinpath(cache_dir, "..", "static", "registries"))
     @test isfile(joinpath(cache_dir, "registry", registry_uuid, registry_treehash))
 
     # Next, hit the `/meta` endpoint, ensure that the version it reports matches with what we expect:
     response = HTTP.get("$(server_url)/meta")
     @test response.status == 200
-    meta = JSON.parse(String(response.body))
+    meta = JSON3.read(String(response.body))
     @test haskey(meta, "pkgserver_version")
     @test meta["pkgserver_version"] == PkgServer.get_pkgserver_version()
 end
@@ -110,9 +110,39 @@ end
     # Ensure that, when we hit `/meta` now, the server knows that it has a bunch of packages and artifacts:
     response = HTTP.get("$(server_url)/meta")
     @test response.status == 200
-    meta = JSON.parse(String(response.body))
-    @test haskey(meta, "packages_cached")
-    @test meta["packages_cached"] >= 70
-    @test haskey(meta, "artifacts_cached")
-    @test meta["artifacts_cached"] >= 30
+    meta = JSON3.read(String(response.body))
+    @test haskey(meta, "julia_version")
+    @test VersionNumber(meta["julia_version"]) >= v"1.3"
+    @test haskey(meta, "pkgserver_version")
+    @test meta["pkgserver_version"] == PkgServer.pkgserver_version
+end
+
+@testset "Access Tracking" begin
+    # Test that the `/stats` endpoint works as expected
+    response = HTTP.get("$(server_url)/stats")
+    @test response.status == 200
+    stats = JSON3.read(String(response.body))
+    @test haskey(stats, "packages_cached")
+    @test stats["packages_cached"] >= 70
+    @test haskey(stats, "artifacts_cached")
+    @test stats["artifacts_cached"] >= 30
+
+    # Find "/registries" endpoint, hit it a couple of times, ensure that the LRU count goes up each time
+    figlet_fonts_resource = "artifact/125ac0315d68bbb612f8c2189ea83401f73238f0"
+    figlet_fonts_entry = stats["lru"][figlet_fonts_resource]
+    @test figlet_fonts_entry["num_accessed"] > 0
+
+    # Now, hit this a couple more times:
+    for idx in 1:5
+        HTTP.get("$(server_url)/$(figlet_fonts_resource)")
+    end
+
+    # Refresh the stats
+    response = HTTP.get("$(server_url)/stats")
+    @test response.status == 200
+    stats = JSON3.read(String(response.body))
+
+    # Ensure that the counter went up, and that the timing has advanced:
+    @test stats["lru"][figlet_fonts_resource]["num_accessed"] >= figlet_fonts_entry["num_accessed"] + 5
+    @test stats["lru"][figlet_fonts_resource]["last_accessed"] > figlet_fonts_entry["last_accessed"]
 end

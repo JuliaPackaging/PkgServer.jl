@@ -1,6 +1,6 @@
 language: julia
 julia:
-  - nightly
+  - 1.4
 notifications:
     email: false
 services:
@@ -17,10 +17,10 @@ before_script:
         make -C deployment up;
         (make -C deployment logs &);
         export JULIA_PKG_SERVER="http://localhost:8000";
-        export JULIA_PKG_SERVER_CACHE_DIR=$(pwd)/deployment/cache;
+        export JULIA_PKG_SERVER_STORAGE_ROOT=$(pwd)/deployment/storage;
       fi
 
 after_script:
-    - if [ ${USE_DOCKER} = 0 ]; then
-        make -C deployment destroy USE_SSL=0;
+    - if [ ${USE_DOCKER} = 1 ]; then
+        make -C deployment destroy;
       fi

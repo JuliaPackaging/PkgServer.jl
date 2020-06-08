@@ -14,10 +14,10 @@ export COMPOSE_FILE
 UID=$(shell id -u)
 export UID
 
-up: cache logs/nginx
+up: storage logs/nginx
 	docker-compose up --build --remove-orphans -d
 
-cache:
+storage:
 	mkdir -p $@
 logs/nginx:
 	mkdir -p $@
