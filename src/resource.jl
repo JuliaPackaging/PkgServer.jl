@@ -185,7 +185,7 @@ const FETCH_FAILS = [Set{String}() for _ = 1:fetch_locks]
 const FETCH_DICTS = [Dict{String,Event}() for _ = 1:fetch_locks]
 
 function fetch(resource::String; servers=config.storage_servers)
-    if hit!(config.cache, resource[2:end])
+    if hit!(config.cache, lstrip(resource, '/'))
         return resource_filepath(resource)
     end
 
