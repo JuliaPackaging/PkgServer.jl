@@ -1,3 +1,17 @@
+## Collected pieces of metadata that we will track over time
+# This value will be overridden in __init__()
+time_start = DateTime(now())
+
+# Total served requests: incremented in serve_file()
+total_hits = Int64(0)
+# Total cache hits: incremented in fetch()
+cached_hits = Int64(0)
+# Total fetch successes: incremented in fetch()
+fetch_hits = Int64(0)
+# Total misses: incremented in start()
+total_misses = Int64(0)
+
+
 ## Functions to serve metadata about the PkgServer itself
 
 function get_pkgserver_version()
@@ -81,6 +95,7 @@ function serve_meta(http::HTTP.Stream)
     metadata = Dict(
         "pkgserver_version" => pkgserver_version,
         "julia_version" => string(VERSION),
+        "start_time" => string(time_start),
     )
     return serve_json(http, metadata)
 end
@@ -93,6 +108,11 @@ function serve_meta_stats(http::HTTP.Stream)
         "lru" => config.cache.entries,
         "packages_cached" => get_num_pkgs_cached(),
         "artifacts_cached" => get_num_artifacts_cached(),
+        # Global response statistics
+        "total_hits" => total_hits,
+        "cached_hits" => cached_hits,
+        "fetch_hits" => fetch_hits,
+        "total_misses" => total_misses,
     )
     return serve_json(http, stats)
 end

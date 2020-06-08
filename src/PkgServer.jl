@@ -9,6 +9,7 @@ using FilesystemDatastructures
 using JSON3, StructTypes
 using Sockets
 using Sockets: InetAddr
+using Dates
 
 include("resource.jl")
 include("meta.jl")
@@ -58,6 +59,9 @@ end
 function __init__()
     # Set default HTTP useragent
     HTTP.setuseragent!("PkgServer (HTTP.jl)")
+
+    # Record our starting time
+    global time_start = now()
 end
 
 function start(;kwargs...)
@@ -113,6 +117,7 @@ function start(;kwargs...)
                 end
             end
 
+            global total_misses += 1
             HTTP.setstatus(http, 404)
             startwrite(http)
         end

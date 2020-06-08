@@ -186,6 +186,7 @@ const FETCH_DICTS = [Dict{String,Event}() for _ = 1:fetch_locks]
 
 function fetch(resource::String; servers=config.storage_servers)
     if hit!(config.cache, lstrip(resource, '/'))
+        global cached_hits += 1
         return resource_filepath(resource)
     end
 
@@ -254,7 +255,11 @@ function fetch(resource::String; servers=config.storage_servers)
     end
 
     # done at last
-    return success ? path : nothing
+    if success
+        global fetch_hits += 1
+        return path
+    end
+    return nothing
 end
 
 function forget_failures()
@@ -320,6 +325,9 @@ function serve_file(
     content_encoding == "identity" ||
         HTTP.setheader(http, "Content-Encoding" => content_encoding)
     startwrite(http)
+
+    # Account this hit
+    global total_hits += 1
 
     # Open the path, write it out directly to the HTTP stream in chunks
     open(path) do io
