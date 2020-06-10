@@ -8,10 +8,12 @@ services:
             - 8000
         volumes:
             - ./storage:/app/storage
+            - ./logs/pkgserver:/app/logs
         environment:
             JULIA_PKG_SERVER: "0.0.0.0:8000"
             JULIA_PKG_SERVER_STORAGE_SERVERS: "https://us-east.storage.julialang.org"
             JULIA_PKG_SERVER_STORAGE_ROOT: "/app/storage"
+            JULIA_PKG_SERVER_LOGS_DIR: "/app/logs"
         labels:
             # Tell watchtower to auto-update this guy
             com.centurylinklabs.watchtower.enable: true

@@ -1,5 +1,5 @@
 #!/usr/bin/env julia
-using PkgServer, Sockets
+using PkgServer, Sockets, Logging, LoggingExtras, Dates
 
 # Accept optional environment-based arguments
 # Eventually, do this via Pkg preferences
@@ -14,6 +14,21 @@ end
 
 storage_root = get(ENV, "JULIA_PKG_SERVER_STORAGE_ROOT", "/tmp/pkgserver")
 storage_servers = strip.(split(get(ENV, "JULIA_PKG_SERVER_STORAGE_SERVERS", "https://us-east.storage.julialang.org"), ","))
+log_dir = get(ENV, "JULIA_PKG_SERVER_LOGS_DIR", joinpath(storage_root, "logs"))
+
+mkpath(storage_root)
+mkpath(log_dir)
+
+# Set up logging
+const date_format = "yyyy-mm-dd HH:MM:SS"
+timestamp_logger(logger) = TransformerLogger(logger) do log
+    merge(log, (; message = "[$(Dates.format(now(), date_format))] $(log.message)"))
+end
+
+global_logger(TeeLogger(
+    timestamp_logger(FileLogger(joinpath(log_dir, "pkgserver.log"); append=true)),
+    current_logger(),
+))
 
 PkgServer.start(;
     listen_addr=Sockets.InetAddr(host, port),
