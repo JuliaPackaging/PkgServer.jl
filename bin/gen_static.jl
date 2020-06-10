@@ -12,7 +12,6 @@ import Dates: DateTime, now
 import Pkg
 import Pkg.TOML
 import Pkg.Artifacts: download_artifact, artifact_path, artifact_names
-import LibGit2
 import Tar
 import TranscodingStreams: TranscodingStream
 import CodecZlib: GzipCompressor, GzipDecompressor
@@ -86,20 +85,16 @@ function create_git_tarball(
     if is_blacklisted(tree_hash)
         return
     end
-    repo = LibGit2.GitRepo(repo_path)
-    tree = LibGit2.GitObject(repo, tree_hash)
     mktempdir() do tree_path
-        opts = LibGit2.CheckoutOptions(
-            checkout_strategy = LibGit2.Consts.CHECKOUT_FORCE,
-            target_directory = Base.unsafe_convert(Cstring, tree_path)
-        )
-        LibGit2.checkout_tree(repo, tree, options=opts)
+        run(`git -C $(repo_path) --work-tree=$(tree_path) checkout -f $(tree_hash) -- .`)
         make_tarball(tarball, tree_path)
         try
             verify_tarball_hash(tarball, tree_hash)
             clear_blacklist(tree_hash)
         catch err
-            @warn err repo_path=repo_path tarball=tarball
+            @warn err repo_path tarball tree_path
+            ondisk_hash = bytes2hex(Pkg.GitTools.tree_hash(tree_path))
+            @warn "verifying on-disk hash" ondisk_hash
             blacklist(tree_hash)
             rm(tarball, force=true)
         end
@@ -272,6 +267,7 @@ for depot in DEPOT_PATH
                     @label again
                     try create_git_tarball(tarball, clone_dir, tree_hash)
                     catch err
+                        @info("create_git_tarball() failed", err)
                         if updated
                             println(stderr, "Cannot checkout $name [$uuid] $tree_hash")
                             blacklist(uuid, tree_hash)
