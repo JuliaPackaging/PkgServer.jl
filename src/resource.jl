@@ -218,48 +218,54 @@ function fetch(resource::String; servers=config.storage_servers)
             # Re-fetch; ideally, this result in a successful `hit!()` immediately.
             return fetch(resource; servers=servers)
         end
+
         fetch_dict[resource] = Event()
     finally
         unlock(fetch_lock)
     end
 
     # this is the only thread fetching the resource
-    if length(servers) == 1
-        download(servers[1], resource)
-    else
-        race_lock = ReentrantLock()
-        @sync for server in servers
-            @spawn begin
-                response = HTTP.head(server * resource, status_exception = false)
-                if response.status == 200
-                    # the first thread to get here downloads
-                    if trylock(race_lock)
-                        download(server, resource)
-                        unlock(race_lock)
+    success = false
+    path = ""
+    try
+        if length(servers) == 1
+            download(servers[1], resource)
+        else
+            race_lock = ReentrantLock()
+            @sync for server in servers
+                @spawn begin
+                    response = HTTP.head(server * resource, status_exception = false)
+                    if response.status == 200
+                        # the first thread to get here downloads
+                        if trylock(race_lock)
+                            download(server, resource)
+                            unlock(race_lock)
+                        end
                     end
+                    # TODO: cancel any hung HEAD requests
                 end
-                # TODO: cancel any hung HEAD requests
             end
         end
-    end
-    path = resource_filepath(resource)
-    success = isfile(path)
 
-    # notify other threads and remove from fetch dict
-    lock(fetch_lock) do
-        if !success
-            push!(fetch_fails, resource)
-            @warn "download failed" resource=resource path=path
+        path = resource_filepath(resource)
+        success = isfile(path)
+
+        # done at last
+        if success
+            global fetch_hits += 1
+            return path
         end
-        notify(pop!(fetch_dict, resource))
+        return nothing
+    finally
+        # notify other threads and remove from fetch dict
+        lock(fetch_lock) do
+            if !success
+                push!(fetch_fails, resource)
+                @warn "download failed" resource=resource path=path
+            end
+            notify(pop!(fetch_dict, resource))
+        end
     end
-
-    # done at last
-    if success
-        global fetch_hits += 1
-        return path
-    end
-    return nothing
 end
 
 function forget_failures()
