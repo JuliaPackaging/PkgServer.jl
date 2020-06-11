@@ -9,7 +9,9 @@ try
     global host = m.captures[2]
     global port = parse(Int, m.captures[3])
 catch
-    error("Invalid JULIA_PKG_SERVER setting!")
+    @warn("Invalid JULIA_PKG_SERVER setting, ignoring and using default!")
+    global host = "0.0.0.0"
+    global port = 8000
 end
 
 storage_root = get(ENV, "JULIA_PKG_SERVER_STORAGE_ROOT", "/tmp/pkgserver")
