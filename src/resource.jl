@@ -276,42 +276,58 @@ function forget_failures()
     end
 end
 
-function tarball_git_hash(tarball::String)
-    local tree_hash
-    mktempdir() do tmp_dir
-        run(`tar -C $tmp_dir -zxf $tarball`)
-        tree_hash = bytes2hex(Pkg.GitTools.tree_hash(tmp_dir))
-        chmod(tmp_dir, 0o777, recursive=true)
-    end
-    return tree_hash
-end
-
 function download(server::String, resource::String)
     @info "downloading resource" server=server resource=resource
     hash = let m = match(hash_part_re, resource)
         m !== nothing ? m.captures[1] : nothing
     end
 
-    write_atomic_lru(resource) do temp_file, io
-        response = HTTP.get(
+    write_atomic_lru(resource) do temp_file, file_io
+        buffio = Base.BufferStream()
+        tar_check_io = Base.BufferStream()
+        tar_extract_task = @async begin
+            # Only do this work if hash !=== nothing
+            if hash === nothing
+                return nothing
+            end
+            @info("tar_extract_task", resource, hash)
+            Tar.tree_hash(TranscodingStream(GzipDecompressor(), tar_check_io))
+        end
+        tee_task = @async begin
+            while !eof(buffio)
+                chunk = readavailable(buffio)
+                write(file_io, chunk)
+
+                if hash !== nothing
+                    write(tar_check_io, chunk)
+                end
+            end
+            close(file_io)
+            close(tar_check_io)
+        end
+
+        # Get the response
+        response = HTTP.get(server * resource,
             status_exception = false,
-            response_stream = io,
-            server * resource,
+            response_stream = buffio,
         )
+
         # Raise warnings about bad HTTP response codes
         if response.status != 200
             @warn "response status $(response.status)"
             return false
         end
 
+        # Wait for the tee task to finish
+        wait(tee_task)
+
+        # Fetch the result of the tarball hash check
+        calc_hash = fetch(tar_extract_task)
+
         # If we're given a hash, then check tarball git hash
-        if hash !== nothing
-            tree_hash = tarball_git_hash(temp_file)
-            # Raise warnings about resource hash mismatches
-            if hash != tree_hash
-                @warn "resource hash mismatch" server=server resource=resource hash=tree_hash
-                return false
-            end
+        if hash != calc_hash
+            @warn "resource hash mismatch" server resource hash calc_hash
+            return false
         end
 
         return true
