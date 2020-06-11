@@ -1,4 +1,4 @@
-using PkgServer, Pkg, HTTP, JSON3
+using PkgServer, Pkg, HTTP, JSON3, Tar
 using Test
 
 # You can either perform the following setup:
@@ -15,13 +15,13 @@ end
 # If these are not set, we will attempt to auto-initiate them.
 server_process = nothing
 if isempty(get(ENV, "JULIA_PKG_SERVER", "")) || isempty(get(ENV, "JULIA_PKG_SERVER_STORAGE_ROOT", ""))
-    @info("Automatically starting local PkgServer for testing at http://127.0.0.1:8000")
     # Start a background PkgServer as a separate process
     code_dir = dirname(@__DIR__)
     temp_dir = mktempdir()
     ENV["JULIA_PKG_SERVER"] = "http://127.0.0.1:8000"
     ENV["JULIA_PKG_SERVER_STORAGE_ROOT"] = temp_dir
 
+    @info("Automatically starting local PkgServer for testing at $(ENV["JULIA_PKG_SERVER"])")
     global server_process = run(`$(Base.julia_cmd()) --project=$(code_dir) $(code_dir)/bin/run_server.jl`; wait=false)
 end
 
@@ -38,5 +38,7 @@ finally
         @info("Reaping automatically-started local PkgServer...")
         kill(server_process)
         wait(server_process)
+        @info("Outputting testing PkgServer logs:")
+        run(`cat $(temp_dir)/logs/pkgserver.log`)
     end    
 end

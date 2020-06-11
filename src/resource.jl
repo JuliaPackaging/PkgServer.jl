@@ -4,12 +4,10 @@ const uuid_re = raw"[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}
 const hash_re = raw"[0-9a-f]{40}"
 const registry_re = Regex("^/registry/($uuid_re)/($hash_re)\$")
 const resource_re = Regex("""
-    ^/registries\$
   | ^/registry/$uuid_re/$hash_re\$
   | ^/package/$uuid_re/$hash_re\$
   | ^/artifact/$hash_re\$
 """, "x")
-const hash_part_re = Regex("/($hash_re)\$")
 
 """
     get_registries(server)
@@ -278,35 +276,28 @@ end
 
 function download(server::String, resource::String)
     @info "downloading resource" server=server resource=resource
-    hash = let m = match(hash_part_re, resource)
-        m !== nothing ? m.captures[1] : nothing
-    end
+    hash = basename(resource)
 
     write_atomic_lru(resource) do temp_file, file_io
         buffio = Base.BufferStream()
-        tar_check_io = Base.BufferStream()
-        tar_extract_task = @async begin
-            # Only do this work if hash !=== nothing
-            if hash === nothing
-                return nothing
-            end
-            @info("tar_extract_task", resource, hash)
-            Tar.tree_hash(TranscodingStream(GzipDecompressor(), tar_check_io))
-        end
+        # Create gzip process to decompress for us, using `gzip()` from `Gzip_jll`
+        gzip_proc = gzip(gz -> open(`$gz -d`, read=true, write=true))
+
+        # Create async task to read in from gzip stdout and pipe it straight to `Tar.tree_hash()`
+        tar_extract_task = @async Tar.tree_hash(gzip_proc.out)
+
+        # Create async task to tee chunks of data from HTTP to file and to gzip
         tee_task = @async begin
             while !eof(buffio)
                 chunk = readavailable(buffio)
                 write(file_io, chunk)
-
-                if hash !== nothing
-                    write(tar_check_io, chunk)
-                end
+                write(gzip_proc.in, chunk)
             end
             close(file_io)
-            close(tar_check_io)
+            close(gzip_proc.in)
         end
 
-        # Get the response
+        # Get the response, storing chunks into our BufferStream to get tee'd out
         response = HTTP.get(server * resource,
             status_exception = false,
             response_stream = buffio,

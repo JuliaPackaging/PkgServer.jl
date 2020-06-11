@@ -12,7 +12,7 @@ using Sockets
 using Sockets: InetAddr
 using Dates
 using Tar
-using TranscodingStreams, CodecZlib
+using Gzip_jll
 
 include("resource.jl")
 include("meta.jl")
