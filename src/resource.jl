@@ -4,12 +4,10 @@ const uuid_re = raw"[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}
 const hash_re = raw"[0-9a-f]{40}"
 const registry_re = Regex("^/registry/($uuid_re)/($hash_re)\$")
 const resource_re = Regex("""
-    ^/registries\$
   | ^/registry/$uuid_re/$hash_re\$
   | ^/package/$uuid_re/$hash_re\$
   | ^/artifact/$hash_re\$
 """, "x")
-const hash_part_re = Regex("/($hash_re)\$")
 
 """
     get_registries(server)
@@ -276,42 +274,51 @@ function forget_failures()
     end
 end
 
-function tarball_git_hash(tarball::String)
-    local tree_hash
-    mktempdir() do tmp_dir
-        run(`tar -C $tmp_dir -zxf $tarball`)
-        tree_hash = bytes2hex(Pkg.GitTools.tree_hash(tmp_dir))
-        chmod(tmp_dir, 0o777, recursive=true)
-    end
-    return tree_hash
-end
-
 function download(server::String, resource::String)
     @info "downloading resource" server=server resource=resource
-    hash = let m = match(hash_part_re, resource)
-        m !== nothing ? m.captures[1] : nothing
-    end
+    hash = basename(resource)
 
-    write_atomic_lru(resource) do temp_file, io
-        response = HTTP.get(
+    write_atomic_lru(resource) do temp_file, file_io
+        buffio = Base.BufferStream()
+        # Create gzip process to decompress for us, using `gzip()` from `Gzip_jll`
+        gzip_proc = gzip(gz -> open(`$gz -d`, read=true, write=true))
+
+        # Create async task to read in from gzip stdout and pipe it straight to `Tar.tree_hash()`
+        tar_extract_task = @async Tar.tree_hash(gzip_proc.out)
+
+        # Create async task to tee chunks of data from HTTP to file and to gzip
+        tee_task = @async begin
+            while !eof(buffio)
+                chunk = readavailable(buffio)
+                write(file_io, chunk)
+                write(gzip_proc.in, chunk)
+            end
+            close(file_io)
+            close(gzip_proc.in)
+        end
+
+        # Get the response, storing chunks into our BufferStream to get tee'd out
+        response = HTTP.get(server * resource,
             status_exception = false,
-            response_stream = io,
-            server * resource,
+            response_stream = buffio,
         )
+
         # Raise warnings about bad HTTP response codes
         if response.status != 200
             @warn "response status $(response.status)"
             return false
         end
 
+        # Wait for the tee task to finish
+        wait(tee_task)
+
+        # Fetch the result of the tarball hash check
+        calc_hash = fetch(tar_extract_task)
+
         # If we're given a hash, then check tarball git hash
-        if hash !== nothing
-            tree_hash = tarball_git_hash(temp_file)
-            # Raise warnings about resource hash mismatches
-            if hash != tree_hash
-                @warn "resource hash mismatch" server=server resource=resource hash=tree_hash
-                return false
-            end
+        if hash != calc_hash
+            @warn "resource hash mismatch" server resource hash calc_hash
+            return false
         end
 
         return true

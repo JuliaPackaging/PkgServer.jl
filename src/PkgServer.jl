@@ -3,6 +3,7 @@ module PkgServer
 using Pkg
 using HTTP
 using Base.Threads: Event, @spawn
+import Base: fetch
 using Random
 using LibGit2
 using FilesystemDatastructures
@@ -10,6 +11,8 @@ using JSON3, StructTypes
 using Sockets
 using Sockets: InetAddr
 using Dates
+using Tar
+using Gzip_jll
 
 include("resource.jl")
 include("meta.jl")
