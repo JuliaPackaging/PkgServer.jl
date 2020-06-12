@@ -4,7 +4,7 @@ const uuid_re = raw"[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}
 const hash_re = raw"[0-9a-f]{40}"
 const registry_re = Regex("^/registry/($uuid_re)/($hash_re)\$")
 const resource_re = Regex("""
-  | ^/registry/$uuid_re/$hash_re\$
+    ^/registry/$uuid_re/$hash_re\$
   | ^/package/$uuid_re/$hash_re\$
   | ^/artifact/$hash_re\$
 """, "x")
