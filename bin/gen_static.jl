@@ -149,6 +149,8 @@ function process_artifact(info::Dict)
         end
     catch err
         @warn err
+        blacklist(tree_hash)
+        return
     end
     mkpath(dirname(tarball))
     make_tarball(tarball, tree_path)
