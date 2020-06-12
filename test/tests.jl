@@ -54,6 +54,9 @@ end
     meta = JSON3.read(String(response.body))
     @test haskey(meta, "pkgserver_version")
     @test meta["pkgserver_version"] == PkgServer.get_pkgserver_version()
+
+    # Ensure that some random URL gets a 404
+    @test_throws HTTP.ExceptionRequest.StatusError HTTP.get("$(server_url)/docs")
 end
 
 function with_depot_path(f::Function, dp::Vector{String})
