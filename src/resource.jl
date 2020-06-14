@@ -284,7 +284,7 @@ function download(server::String, resource::String)
         gzip_proc = gzip(gz -> open(`$gz -d`, read=true, write=true))
 
         # Create async task to read in from gzip stdout and pipe it straight to `Tar.tree_hash()`
-        tar_extract_task = @async Tar.tree_hash(gzip_proc.out)
+        tar_extract_task = @async Tar.tree_hash(gzip_proc.out; skip_empty=true)
 
         # Create async task to tee chunks of data from HTTP to file and to gzip
         tee_task = @async begin

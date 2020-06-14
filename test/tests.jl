@@ -41,7 +41,7 @@ end
         response = HTTP.get("$(server_url)/registry/$(registry_uuid)/$(registry_treehash)"; response_stream=tarball_io)
         close(tarball_io)
         @test response.status == 200
-        @test registry_treehash == Tar.tree_hash(open(pipeline(`cat $(tarball_path)`, `gzip -d`), read=true))
+        @test registry_treehash == Tar.tree_hash(open(pipeline(`cat $(tarball_path)`, `gzip -d`), read=true); skip_empty=true)
     end
 
     # Verify that these files exist within the cache
