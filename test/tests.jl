@@ -149,3 +149,43 @@ end
     @test stats["lru"][figlet_fonts_resource]["num_accessed"] >= figlet_fonts_entry["num_accessed"] + 5
     @test stats["lru"][figlet_fonts_resource]["last_accessed"] > figlet_fonts_entry["last_accessed"]
 end
+
+@testset "Partial Content" begin
+    # Example@0.5.3
+    uuid = "7876af07-990d-54b4-ab0e-23690620f79a"
+    treehash = "46e44e869b4d90b96bd8ed1fdcf32244fddfb6cc"
+    content_url = "$(server_url)/package/$uuid/$treehash"
+    # Get full file
+    full_resp = HTTP.get(content_url);
+    @test full_resp.status == 200
+    # Specifying both startbyte and stopbyte
+    partial_resp = HTTP.get(content_url, ["Range"=>"bytes=0-1023"]);
+    @test partial_resp.status == 206
+    @test HTTP.header(partial_resp, "Content-Range") == "bytes 0-1023/2699"
+    @test HTTP.header(partial_resp, "Content-Length") == "1024"
+    @test partial_resp.body == full_resp.body[1:1024]
+    # Specifying startbyte only
+    partial_resp = HTTP.get(content_url, ["Range"=>"bytes=1024-"]);
+    @test partial_resp.status == 206
+    @test HTTP.header(partial_resp, "Content-Range") == "bytes 1024-2698/2699"
+    @test HTTP.header(partial_resp, "Content-Length") == "1675"
+    @test partial_resp.body == full_resp.body[1025:end]
+    # Specifying stopbyte only
+    partial_resp = HTTP.get(content_url, ["Range"=>"bytes=-2047"]);
+    @test partial_resp.status == 206
+    @test HTTP.header(partial_resp, "Content-Range") == "bytes 0-2047/2699"
+    @test HTTP.header(partial_resp, "Content-Length") == "2048"
+    @test partial_resp.body == full_resp.body[1:2048]
+    # Stopbyte larger than filesize
+    partial_resp = HTTP.get(content_url, ["Range"=>"bytes=0-10000"]);
+    @test partial_resp.status == 206
+    @test HTTP.header(partial_resp, "Content-Range") == "bytes 0-2698/2699"
+    @test HTTP.header(partial_resp, "Content-Length") == "2699"
+    @test partial_resp.body == full_resp.body
+    # Edgecase: startbyte larger than stopbyte
+    partial_resp = HTTP.get(content_url, ["Range"=>"bytes=2-1"]);
+    @test partial_resp.status == 200
+    @test HTTP.header(partial_resp, "Content-Range") == ""
+    @test HTTP.header(partial_resp, "Content-Length") == "2699"
+    @test partial_resp.body == full_resp.body
+end

@@ -332,8 +332,32 @@ function serve_file(
     content_encoding::String;
     buffer::Vector{UInt8} = Vector{UInt8}(undef, 2*1024*1024),
 )
-    size = filesize(path)
-    HTTP.setheader(http, "Content-Length" => string(size))
+    content_length = filesize(path)
+    startbyte, stopbyte = 0, content_length-1
+
+    # Support single byte ranges
+    range_string = HTTP.header(http, "Range")
+    if !isempty(range_string)
+        # Look for the following patterns: "bytes=a-b", "bytes=a-", and "bytes=-b".
+        # Empty captures will fail tryparse and then be replaced with the correct endpoints.
+        m = match(r"^\s*bytes\s*=\s*(\d*)\s*-\s*(\d*)\s*$", range_string)
+        if m === nothing
+            @error "unsupported HTTP Range request, ignoring" range_string
+        else
+            requested_startbyte = max(something(tryparse(Int, m[1]), startbyte), startbyte)
+            requested_stopbyte = min(something(tryparse(Int, m[2]), stopbyte), stopbyte)
+            if requested_stopbyte - requested_startbyte >= 0
+                startbyte = requested_startbyte
+                stopbyte = requested_stopbyte
+                HTTP.setstatus(http, 206) # Partial Content
+                HTTP.setheader(http, "Content-Range" => "bytes $(startbyte)-$(stopbyte)/$(content_length)")
+                content_length = stopbyte - startbyte + 1
+            end
+        end
+    end
+
+    HTTP.setheader(http, "Content-Length" => string(content_length))
+    HTTP.setheader(http, "Accept-Ranges" => "bytes")
     HTTP.setheader(http, "Content-Type" => content_type)
     content_encoding == "identity" ||
         HTTP.setheader(http, "Content-Encoding" => content_encoding)
@@ -344,13 +368,16 @@ function serve_file(
 
     # Open the path, write it out directly to the HTTP stream in chunks
     open(path) do io
+        seek(io, startbyte)
         t = 0
-        while !eof(io)
-            n = readbytes!(io, buffer)
-            t += write(http, view(buffer, 1:n))
+        while t < content_length
+            # See JuliaLang/julia#36300, can be optimized later to only read r bytes
+            # r = min(length(buffer), content_length - t)
+            n = readbytes!(io, buffer, #=r=#)
+            t += write(http, view(buffer, 1:min(n, content_length - t)))
         end
-        if t != size
-            @error "file size mismatch" path stat_size=size actual=t
+        if t != content_length
+            @error "file size mismatch" path stat_size=content_length actual=t
         end
     end
 end
