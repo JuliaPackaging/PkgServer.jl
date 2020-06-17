@@ -14,6 +14,7 @@ using Dates
 using Tar
 using Gzip_jll
 
+include("task_utils.jl")
 include("resource.jl")
 include("meta.jl")
 
@@ -77,11 +78,9 @@ function start(;kwargs...)
     @sync begin
         @spawn while true
             sleep(1)
-            try
+            @try_printerror begin
                 forget_failures()
                 update_registries()
-            catch e
-                @error("Registry update error: ", e)
             end
         end
         @info("server listening", config.listen_addr)
