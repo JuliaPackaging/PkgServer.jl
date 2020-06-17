@@ -19,9 +19,9 @@ while true
         break
     end
 
-    # If we've been trying this for more than 20s, error out
-    if (time() - t_start) >= 20
-        error("Unable to hit testing server at $(server_url)/registries, get HTTP $(response_code)")
+    # If we've been trying this for more than one minute, error out
+    if (time() - t_start) >= 60
+        error("Unable to hit testing server at $(server_url)/registries, got HTTP $(response_code)")
     end
 
     # Sleep a bit between attempts
