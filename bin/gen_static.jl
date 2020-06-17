@@ -89,8 +89,16 @@ function create_git_tarball(
         run(`git -C $(repo_path) --work-tree=$(tree_path) checkout -f $(tree_hash) -- .`)
         make_tarball(tarball, tree_path)
         try
-            verify_tarball_hash(tarball, tree_hash)
+            nskip_hash, yskip_hash = verify_tarball_hash(tarball, tree_hash)
             clear_blacklist(tree_hash)
+
+            # If we've been calling it by the wrong hash, make sure to store it at the right name too
+            if nskip_hash != tree_hash
+                nskip_tarball = joinpath(dirname(tarball), nskip_hash)
+                if !isfile(nskip_tarball)
+                    cp(tarball, nskip_tarball)
+                end
+            end
         catch err
             @warn err repo_path tarball tree_path
             ondisk_hash = bytes2hex(Pkg.GitTools.tree_hash(tree_path))
@@ -106,20 +114,16 @@ function verify_tarball_hash(
     tarball::AbstractString,
     tree_hash::AbstractString,
 )
-    local hash
-    mktempdir() do tmp_dir
-        open(tarball) do io
-            Tar.extract(decompress(io), tmp_dir)
-        end
-        hash = bytes2hex(Pkg.GitTools.tree_hash(tmp_dir))
-        chmod(tmp_dir, 0o700, recursive=true)
-    end
-    hash == tree_hash || error("""
-        tree hash mismatch:
-        - expected: $tree_hash
-        - computed: $hash
+    nskip_hash = open(io -> Tar.tree_hash(decompress(io)), tarball)
+    yskip_hash = open(io -> Tar.tree_hash(decompress(io); skip_empty=true), tarball)
+    if nskip_hash != tree_hash && yskip_hash != tree_hash
+        error("""
+            tree hash mismatch:
+            - expected: $tree_hash
+            - computed: $nskip_hash/$yskip_hash
         """)
-    return
+    end
+    return nskip_hash, yskip_hash
 end
 
 function process_artifact(info::Dict)
@@ -155,8 +159,15 @@ function process_artifact(info::Dict)
     mkpath(dirname(tarball))
     make_tarball(tarball, tree_path)
     try
-        verify_tarball_hash(tarball, tree_hash)
+        nskip_hash, yskip_hash = verify_tarball_hash(tarball, tree_hash)
         clear_blacklist(tree_hash)
+
+        if nskip_hash != tree_hash
+            nskip_tarball = joinpath(dirname(tarball), nskip_hash)
+            if !isfile(nskip_tarball)
+                cp(tarball, nskip_tarball)
+            end
+        end
     catch err
         @warn err tree_path=tree_path tarball=tarball
         blacklist(tree_hash)
