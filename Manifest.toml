@@ -1,9 +1,9 @@
 # This file is machine-generated - editing it directly is not advised
 
 [[ArgTools]]
-git-tree-sha1 = "3ca019a0a4a469dbade0869856794ad783ef3574"
+git-tree-sha1 = "ed68c30deded537749c99f012873bb16708c6fb6"
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
-version = "1.0.1"
+version = "1.1.0"
 
 [[Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
@@ -113,6 +113,13 @@ uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 [[Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 
+[[SimpleBufferStream]]
+git-tree-sha1 = "e179249740d39ffc9b371d7bae6877eb5e46fd90"
+repo-rev = "master"
+repo-url = "https://github.com/staticfloat/SimpleBufferStream.jl"
+uuid = "777ac1f9-54b0-4bf8-805c-2214025038e7"
+version = "0.1.0"
+
 [[Sockets]]
 uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
 
@@ -124,7 +131,9 @@ version = "1.1.0"
 
 [[Tar]]
 deps = ["ArgTools", "SHA"]
-git-tree-sha1 = "f4c656310c65efd6e4aa1c7f6884cac8e2a5863a"
+git-tree-sha1 = "b85b5161fea5cc7dfa690062495d0cb02a5e5213"
+repo-rev = "master"
+repo-url = "https://github.com/JuliaIO/Tar.jl.git"
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
 version = "1.5.0"
 

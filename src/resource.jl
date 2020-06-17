@@ -274,33 +274,73 @@ function forget_failures()
     end
 end
 
+"""
+    tee_task(io_in, io_outs...)
+
+Creates an asynchronous task that reads in from `io_in` in buffer chunks, writing
+available bytes out to all elements of `io_outs` as quickly as possible until `io_in` is
+closed.  Closes all elements of `io_outs` once that is finished.  Returns the `Task`.
+"""
+function tee_task(io_in, io_outs...)
+    return @async begin
+        @try_printerror begin
+            total_size = 0
+            while !eof(io_in)
+                chunk = readavailable(io_in)
+                #@info(name, len=length(chunk), total=total_size)
+                total_size += length(chunk)
+                for io_out in io_outs
+                    write(io_out, chunk)
+                end
+            end
+            for io_out in io_outs
+                close(io_out)
+            end
+        end
+    end
+end
+
 function download(server::String, resource::String)
     @info "downloading resource" server=server resource=resource
     hash = basename(resource)
 
     write_atomic_lru(resource) do temp_file, file_io
-        buffio = Base.BufferStream()
+        # We've got a moderately complex flow of data here.  We manage it all using
+        # asynchronous tasks and processes.  In summary, we need to download the given
+        # resource, decompress it, and determine its tree hash.  Complicating this is the
+        # fact that the tree hash could be an older tree hash that skipped empty
+        # directories, so we need to tree hash it twice.  And we want to do this in a
+        # streaming fashion, so as to minimize latency for the user.
+        #
+        # We therefore:
+        #   - Stream HTTP request into `http_buffio`
+        #   - tee `http_buffio` into both `file_io`, and `gzip_proc`, to simultaneously
+        #     store it and decompress it for live tree hashing.
+        #   - tee `gzip_proc` into two separate `tar_task_*` tasks, to compute the skip-
+        #     empty and non-skip-empty hashes simultaneously.
+        #   - If either of the hashes match, we keep the file.  If it was originally
+        #     identified by the `skip_empty` version of the hash, store it under both.
+
+        # Backing buffers for `tee` nodes
+        http_buffio = BufferStream()
+        tar_skip_buffio = BufferStream()
+        tar_noskip_buffio = BufferStream()
+
         # Create gzip process to decompress for us, using `gzip()` from `Gzip_jll`
         gzip_proc = gzip(gz -> open(`$gz -d`, read=true, write=true))
 
-        # Create async task to read in from gzip stdout and pipe it straight to `Tar.tree_hash()`
-        tar_extract_task = @async Tar.tree_hash(gzip_proc.out)
+        # Create tee nodes, one http -> (file, gzip), and one gzip -> (skip, noskip)
+        http_tee_task = tee_task(http_buffio, file_io, gzip_proc.in)
+        tar_tee_task = tee_task(gzip_proc.out, tar_skip_buffio, tar_noskip_buffio)
 
-        # Create async task to tee chunks of data from HTTP to file and to gzip
-        tee_task = @async begin
-            while !eof(buffio)
-                chunk = readavailable(buffio)
-                write(file_io, chunk)
-                write(gzip_proc.in, chunk)
-            end
-            close(file_io)
-            close(gzip_proc.in)
-        end
+        # Create two tasks to read in the gzip output and do in-tar tree hashing.
+        tar_skip_task = @async Tar.tree_hash(tar_skip_buffio; skip_empty=true)
+        tar_noskip_task = @async Tar.tree_hash(tar_noskip_buffio; skip_empty=false)
 
-        # Get the response, storing chunks into our BufferStream to get tee'd out
+        # Initiate the HTTP request, and let the data flow.
         response = HTTP.get(server * resource,
             status_exception = false,
-            response_stream = buffio,
+            response_stream = http_buffio,
         )
 
         # Raise warnings about bad HTTP response codes
@@ -309,16 +349,30 @@ function download(server::String, resource::String)
             return false
         end
 
-        # Wait for the tee task to finish
-        wait(tee_task)
+        # Wait for the tee tasks to finish
+        wait(http_tee_task)
+        wait(tar_tee_task)
 
         # Fetch the result of the tarball hash check
-        calc_hash = fetch(tar_extract_task)
+        calc_skip_hash = fetch(tar_skip_task)
+        calc_noskip_hash = fetch(tar_noskip_task)
 
-        # If we're given a hash, then check tarball git hash
-        if hash != calc_hash
-            @warn "resource hash mismatch" server resource hash calc_hash
+        # If nothing matches, freak out.
+        if hash != calc_skip_hash && hash != calc_noskip_hash
+            @warn "resource hash mismatch" server resource hash calc_skip_hash calc_noskip_hash
             return false
+        end
+
+        # If calc_skip_hash matches, then store the file under the true hash as well.
+        if hash != calc_noskip_hash && hash == calc_skip_hash
+            @warn "archaic skip hash detected" resource hash calc_noskip_hash
+
+            noskip_resource = joinpath(basename(resource), calc_noskip_hash)
+            write_atomic_lru(noskip_resource) do noskip_temp_file, noskip_file_io
+                close(noskip_file_io)
+                rm(noskip_temp_file)
+                cp(temp_file, noskip_temp_file)
+            end
         end
 
         return true

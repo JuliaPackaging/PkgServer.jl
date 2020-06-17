@@ -150,6 +150,23 @@ end
     @test stats["lru"][figlet_fonts_resource]["last_accessed"] > figlet_fonts_entry["last_accessed"]
 end
 
+@testset "Skip-nonskip ambiguity testing" begin
+    art_yskip_hash = "00499ee910a92cd27ecab7620029a802136c1048"
+    art_nskip_hash = "2da0ddeae4275db146c85efe7310b1d3148938d1"
+
+    # Hit a resource that contains an artifact that we know has empty directories within it.
+    # Ensure that it exists both at its nskip and its yskip hashes, because it was originally
+    # published under the yskip hash.
+    mktemp() do tarball_path, tarball_io
+        response = HTTP.get("$(server_url)/artifact/$(art_yskip_hash)"; response_stream=tarball_io)
+        close(tarball_io)
+        @test response.status == 200
+        @test art_nskip_hash == Tar.tree_hash(open(pipeline(`cat $(tarball_path)`, `gzip -d`), read=true))
+
+        # Also test that it's available at its nskip hash:
+        @test HTTP.head("$(server_url)/artifact/$(art_yskip_hash)").status == 200
+    end
+end
 @testset "Partial Content" begin
     # Example@0.5.3
     uuid = "7876af07-990d-54b4-ab0e-23690620f79a"

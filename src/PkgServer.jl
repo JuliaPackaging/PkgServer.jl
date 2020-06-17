@@ -7,6 +7,7 @@ import Base: fetch
 using Random
 using LibGit2
 using FilesystemDatastructures
+using SimpleBufferStream
 using JSON3, StructTypes
 using Sockets
 using Sockets: InetAddr
