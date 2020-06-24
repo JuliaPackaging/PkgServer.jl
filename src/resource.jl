@@ -212,7 +212,12 @@ function fetch(resource::String; servers=config.storage_servers)
             # another thread is already downloading this resource
             @debug("waiting for in-progress download", resource)
             fetch_event = fetch_dict[resource]
+
+            # Release the fetch lock while we're waiting
+            unlock(fetch_lock)
             wait(fetch_event)
+            lock(fetch_lock)
+
             # Re-fetch; ideally, this result in a successful `hit!()` immediately.
             return fetch(resource; servers=servers)
         end
