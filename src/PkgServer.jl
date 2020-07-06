@@ -77,7 +77,9 @@ function start(;kwargs...)
     update_registries()
 
     @sync begin
+        global last_registry_update
         @spawn while true
+            last_registry_update = now()
             sleep(1)
             @try_printerror begin
                 forget_failures()

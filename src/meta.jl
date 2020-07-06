@@ -1,6 +1,9 @@
 ## Collected pieces of metadata that we will track over time
 # This value will be overridden in __init__()
-time_start = DateTime(now())
+time_start = now()
+
+# Last time we updated the registry
+last_registry_update = now()
 
 # Total served requests: incremented in serve_file()
 total_hits = Int64(0)
@@ -96,6 +99,7 @@ function serve_meta(http::HTTP.Stream)
         "pkgserver_version" => pkgserver_version,
         "julia_version" => string(VERSION),
         "start_time" => string(time_start),
+        "last_registry_update" => string(last_registry_update),
     )
     return serve_json(http, metadata)
 end
