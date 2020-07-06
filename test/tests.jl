@@ -117,7 +117,7 @@ end
     @test haskey(meta, "julia_version")
     @test VersionNumber(meta["julia_version"]) >= v"1.3"
     @test haskey(meta, "pkgserver_version")
-    @test meta["pkgserver_version"] == PkgServer.pkgserver_version
+    @test meta["pkgserver_version"] == PkgServer.get_pkgserver_version()
 end
 
 @testset "Access Tracking" begin
