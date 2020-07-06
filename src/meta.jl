@@ -17,19 +17,21 @@ total_misses = Int64(0)
 
 ## Functions to serve metadata about the PkgServer itself
 
+const pkgserver_version = Ref{Union{Nothing,String}}(nothing)
 function get_pkgserver_version()
-    # Get PkgServer.jl's version and git sha
-    version = Pkg.TOML.parsefile(joinpath(@__DIR__, "..", "Project.toml"))["version"]
-    try
-        repo = LibGit2.GitRepo(dirname(@__DIR__))
-        gitsha = string(LibGit2.GitHash(LibGit2.GitCommit(repo, "HEAD")))
-        return "$(version)-$(gitsha)"
-    catch
-        return "$(version)"
+    if pkgserver_version[] === nothing
+        # Get PkgServer.jl's version and git sha
+        version = Pkg.TOML.parsefile(joinpath(@__DIR__, "..", "Project.toml"))["version"]
+        try
+            repo = LibGit2.GitRepo(dirname(@__DIR__))
+            gitsha = string(LibGit2.GitHash(LibGit2.GitCommit(repo, "HEAD")))
+            pkgserver_version[] = "$(version)-$(gitsha)"
+        catch
+            pkgserver_version[] = "$(version)"
+        end
     end
+    return pkgserver_version[]
 end
-# We store this once, since it's not exactly going to change
-const pkgserver_version = get_pkgserver_version()
 
 function get_num_hashnamed_files(dir)
     # If this directory doesn't exist, then we haven't cached anything!
@@ -96,7 +98,7 @@ end
 function serve_meta(http::HTTP.Stream)
     # We serve a JSON representation of some metadata about this PkgServer
     metadata = Dict(
-        "pkgserver_version" => pkgserver_version,
+        "pkgserver_version" => get_pkgserver_version(),
         "julia_version" => string(VERSION),
         "start_time" => string(time_start),
         "last_registry_update" => string(last_registry_update),

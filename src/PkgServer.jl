@@ -42,7 +42,10 @@ struct ServerConfig
                                 "23338594-aafe-5451-b93e-139f81909106" =>
                                 RegistryMeta("https://github.com/JuliaRegistries/General")
                             ),
-                            storage_servers = ["https://us-east.storage.julialang.org"],
+                            storage_servers = [
+                                "https://us-east.storage.julialang.org",
+                                "https://kr.storage.julialang.org",
+                            ],
                             keep_free=3*1024^3)
         # Right now, the only thing we store in `static/` is `/registries`
         mkpath(joinpath(storage_root, "static"))
