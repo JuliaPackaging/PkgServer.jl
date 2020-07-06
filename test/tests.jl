@@ -173,7 +173,7 @@ end
     treehash = "46e44e869b4d90b96bd8ed1fdcf32244fddfb6cc"
     content_url = "$(server_url)/package/$uuid/$treehash"
     # Get full file
-    full_resp = HTTP.get(content_url);
+    full_resp = HTTP.get(content_url)
     @test full_resp.status == 200
     # Specifying both startbyte and stopbyte
     partial_resp = HTTP.get(content_url, ["Range"=>"bytes=0-1023"]);
