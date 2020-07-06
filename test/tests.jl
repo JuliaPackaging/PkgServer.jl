@@ -175,34 +175,36 @@ end
     # Get full file
     full_resp = HTTP.get(content_url)
     @test full_resp.status == 200
+    full_length = length(full_resp.body)
+    @test full_length > 2048
     # Specifying both startbyte and stopbyte
     partial_resp = HTTP.get(content_url, ["Range"=>"bytes=0-1023"]);
     @test partial_resp.status == 206
-    @test HTTP.header(partial_resp, "Content-Range") == "bytes 0-1023/2699"
+    @test HTTP.header(partial_resp, "Content-Range") == "bytes 0-1023/$(full_length)"
     @test HTTP.header(partial_resp, "Content-Length") == "1024"
     @test partial_resp.body == full_resp.body[1:1024]
     # Specifying startbyte only
     partial_resp = HTTP.get(content_url, ["Range"=>"bytes=1024-"]);
     @test partial_resp.status == 206
-    @test HTTP.header(partial_resp, "Content-Range") == "bytes 1024-2698/2699"
-    @test HTTP.header(partial_resp, "Content-Length") == "1675"
+    @test HTTP.header(partial_resp, "Content-Range") == "bytes 1024-$(full_length-1)/$(full_length)"
+    @test HTTP.header(partial_resp, "Content-Length") == string(full_length - 1024)
     @test partial_resp.body == full_resp.body[1025:end]
     # Specifying stopbyte only
     partial_resp = HTTP.get(content_url, ["Range"=>"bytes=-2047"]);
     @test partial_resp.status == 206
-    @test HTTP.header(partial_resp, "Content-Range") == "bytes 0-2047/2699"
+    @test HTTP.header(partial_resp, "Content-Range") == "bytes 0-2047/$(full_length)"
     @test HTTP.header(partial_resp, "Content-Length") == "2048"
     @test partial_resp.body == full_resp.body[1:2048]
     # Stopbyte larger than filesize
     partial_resp = HTTP.get(content_url, ["Range"=>"bytes=0-10000"]);
     @test partial_resp.status == 206
-    @test HTTP.header(partial_resp, "Content-Range") == "bytes 0-2698/2699"
-    @test HTTP.header(partial_resp, "Content-Length") == "2699"
+    @test HTTP.header(partial_resp, "Content-Range") == "bytes 0-$(full_length-1)/$(full_length)"
+    @test HTTP.header(partial_resp, "Content-Length") == string(full_length)
     @test partial_resp.body == full_resp.body
     # Edgecase: startbyte larger than stopbyte
     partial_resp = HTTP.get(content_url, ["Range"=>"bytes=2-1"]);
     @test partial_resp.status == 200
     @test HTTP.header(partial_resp, "Content-Range") == ""
-    @test HTTP.header(partial_resp, "Content-Length") == "2699"
+    @test HTTP.header(partial_resp, "Content-Length") == string(full_length)
     @test partial_resp.body == full_resp.body
 end
