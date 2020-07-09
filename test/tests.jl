@@ -67,6 +67,17 @@ end
 
     # Ensure that some random URL gets a 404
     @test_throws HTTP.ExceptionRequest.StatusError HTTP.get("$(server_url)/docs")
+
+    # Test a dynamically-generated artifact TOML
+    art_tree_hash = "4ed4e6caa3c4559f34d9eafd2f42e9863f83b573"
+    art_name = "Xorg_xineramaproto"
+    response = HTTP.get("$(server_url)/artifact/$(art_tree_hash)/$(art_name)")
+    @test response.status == 200
+    art_toml = TOML.parse(String(response.body))
+    @test haskey(art_toml, art_name)
+    @test haskey(art_toml[art_name], "git-tree-sha1")
+    @test art_toml[art_name]["git-tree-sha1"] == art_tree_hash
+    @test haskey(art_toml[art_name], "download")
 end
 
 function with_depot_path(f::Function, dp::Vector{String})
@@ -177,6 +188,7 @@ end
         @test HTTP.head("$(server_url)/artifact/$(art_yskip_hash)").status == 200
     end
 end
+
 @testset "Partial Content" begin
     # Example@0.5.3
     uuid = "7876af07-990d-54b4-ab0e-23690620f79a"

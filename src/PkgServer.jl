@@ -18,7 +18,7 @@ using Gzip_jll
 include("task_utils.jl")
 include("resource.jl")
 include("meta.jl")
-
+include("dynamic.jl")
 mutable struct RegistryMeta
     # Upstream registry URL (e.g. "https://github.com/JuliaRegistries/General")
     upstream_url::String
@@ -116,6 +116,15 @@ function start(;kwargs...)
                 path = fetch(resource)
                 if path !== nothing
                     serve_file(http, path, "application/tar",  "gzip")
+                    return
+                end
+            end
+
+            m = match(artifact_toml_re, resource)
+            if m !== nothing
+                artifact_path = fetch(m.captures[1])
+                if artifact_path !== nothing
+                    serve_artifact_toml(http, artifact_path, m.captures[2])
                     return
                 end
             end
