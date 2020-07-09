@@ -142,8 +142,8 @@ end
 end
 
 @testset "Access Tracking" begin
-    # Test that the `/stats` endpoint works as expected
-    response = HTTP.get("$(server_url)/stats")
+    # Test that the `/meta/stats` endpoint works as expected
+    response = HTTP.get("$(server_url)/meta/stats")
     @test response.status == 200
     stats = JSON3.read(String(response.body))
     @test haskey(stats, "packages_cached")
@@ -162,7 +162,7 @@ end
     end
 
     # Refresh the stats
-    response = HTTP.get("$(server_url)/stats")
+    response = HTTP.get("$(server_url)/meta/stats")
     @test response.status == 200
     stats = JSON3.read(String(response.body))
 

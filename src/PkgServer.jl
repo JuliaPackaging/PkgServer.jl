@@ -97,7 +97,7 @@ function start(;kwargs...)
                 serve_meta(http)
                 return
             end
-            if resource == "/stats"
+            if resource == "/meta/stats"
                 serve_meta_stats(http)
                 return
             end
