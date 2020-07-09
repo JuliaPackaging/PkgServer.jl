@@ -33,6 +33,15 @@ function get_pkgserver_version()
     return pkgserver_version[]
 end
 
+# Return the fully-qualified domain name of this server, if set.
+const pkgserver_url = Ref{Union{Nothing,String}}(nothing)
+function get_pkgserver_url()
+    if pkgserver_url[] === nothing
+        pkgserver_url[] = string("https://", get(ENV, "JULIA_PKG_SERVER_FQDN", "pkg.julialang.org"))
+    end
+    return pkgserver_url[]
+end
+
 function get_num_hashnamed_files(dir)
     # If this directory doesn't exist, then we haven't cached anything!
     if !isdir(dir)
@@ -99,6 +108,7 @@ function serve_meta(http::HTTP.Stream)
     # We serve a JSON representation of some metadata about this PkgServer
     metadata = Dict(
         "pkgserver_version" => get_pkgserver_version(),
+        "pkgserver_url" => get_pkgserver_url(),
         "julia_version" => string(VERSION),
         "start_time" => string(time_start),
         "last_registry_update" => string(last_registry_update),

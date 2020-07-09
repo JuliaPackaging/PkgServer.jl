@@ -54,6 +54,8 @@ end
     meta = JSON3.read(String(response.body))
     @test haskey(meta, "pkgserver_version")
     @test meta["pkgserver_version"] == PkgServer.get_pkgserver_version()
+    @test haskey(meta, "pkgserver_url")
+    @test meta["pkgserver_url"] == "https://pkg.julialang.org"
 
     # Ensure that some random URL gets a 404
     @test_throws HTTP.ExceptionRequest.StatusError HTTP.get("$(server_url)/docs")
