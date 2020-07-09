@@ -102,6 +102,7 @@ function serve_meta(http::HTTP.Stream)
         "julia_version" => string(VERSION),
         "start_time" => string(time_start),
         "last_registry_update" => string(last_registry_update),
+        "maxrss" => Int(Sys.maxrss()),
     )
     return serve_json(http, metadata)
 end
