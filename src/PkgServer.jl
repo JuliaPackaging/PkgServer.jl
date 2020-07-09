@@ -113,7 +113,7 @@ function start(;kwargs...)
 
             # If the user asked for something that is an actual resource, send it directly
             if occursin(resource_re, resource)
-                path = fetch(resource)
+                path = fetch_resource(resource)
                 if path !== nothing
                     serve_file(http, path, "application/tar",  "gzip")
                     return
@@ -122,7 +122,7 @@ function start(;kwargs...)
 
             m = match(artifact_toml_re, resource)
             if m !== nothing
-                artifact_path = fetch(m.captures[1])
+                artifact_path = fetch_resource(m.captures[1])
                 if artifact_path !== nothing
                     serve_artifact_toml(http, artifact_path, m.captures[2])
                     return

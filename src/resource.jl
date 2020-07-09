@@ -16,7 +16,7 @@ Interrogate a storage server for a list of registries, match the response agains
 registries we are paying attention to, return dict mapping from registry UUID to its
 latest treehash.
 """
-function get_registries(server::String)
+function get_registries(server::AbstractString)
     regs = Dict{String,String}()
     response = HTTP.get("$server/registries")
     for line in eachline(IOBuffer(response.body))
@@ -55,7 +55,7 @@ end
 
 
 """
-    write_atomic_lru(f::Function, resource::String)
+    write_atomic_lru(f::Function, resource::AbstractString)
 
 Performs an atomic filesystem write by writing out to a file on the same
 filesystem as the given `path`, then `move()`'ing the file to its eventual
@@ -65,7 +65,7 @@ of `f()` is `false` or an exception is raised, the write will be aborted.
 
 Also tracks the file with the global LRU cache as configured in `config.cache`.
 """
-function write_atomic_lru(f::Function, resource::String)
+function write_atomic_lru(f::Function, resource::AbstractString)
     # First, write a temp file into the `temp` directory:
     temp_file = joinpath(config.root, "temp", string(resource[2:end], ".tmp.", randstring()))
     try
@@ -87,7 +87,7 @@ function write_atomic_lru(f::Function, resource::String)
     end
 end
 
-function resource_filepath(resource::String)
+function resource_filepath(resource::AbstractString)
     # We strip off the leading `/` to pass this into the filecache
     return filepath(config.cache, resource[2:end])
 end
@@ -107,7 +107,7 @@ end
 
 Verify that the origin git repository knows about the given registry tree hash.
 """
-function verify_registry_hash(uuid::String, hash::String)
+function verify_registry_hash(uuid::AbstractString, hash::AbstractString)
     url = Pkg.Operations.get_archive_url_for_version(config.registries[uuid].upstream_url, hash)
     return url === nothing || url_exists(url)
 end
@@ -151,7 +151,7 @@ function update_registries()
 
             # try hashes known to fewest servers first, ergo newest
             hash_servers = sort!(hash_info[hash])
-            fetch("/registry/$uuid/$hash", servers=hash_servers) !== nothing || continue
+            fetch_resource("/registry/$uuid/$hash", servers=hash_servers) !== nothing || continue
             if config.registries[uuid].latest_hash != hash
                 @info("new current registry hash", uuid, hash, hash_servers)
                 changed = true
@@ -182,7 +182,7 @@ const FETCH_LOCKS = [ReentrantLock() for _ = 1:fetch_locks]
 const FETCH_FAILS = [Set{String}() for _ = 1:fetch_locks]
 const FETCH_DICTS = [Dict{String,Event}() for _ = 1:fetch_locks]
 
-function fetch(resource::String; servers=config.storage_servers)
+function fetch_resource(resource::AbstractString; servers=config.storage_servers)
     if hit!(config.cache, lstrip(resource, '/'))
         global cached_hits += 1
         return resource_filepath(resource)
@@ -219,7 +219,7 @@ function fetch(resource::String; servers=config.storage_servers)
             lock(fetch_lock)
 
             # Re-fetch; ideally, this result in a successful `hit!()` immediately.
-            return fetch(resource; servers=servers)
+            return fetch_resource(resource; servers=servers)
         end
 
         fetch_dict[resource] = Event()
@@ -305,7 +305,7 @@ function tee_task(io_in, io_outs...)
     end
 end
 
-function download(server::String, resource::String)
+function download(server::AbstractString, resource::AbstractString)
     @info "downloading resource" server=server resource=resource
     hash = basename(resource)
 
@@ -386,9 +386,9 @@ end
 
 function serve_file(
     http::HTTP.Stream,
-    path::String,
-    content_type::String,
-    content_encoding::String;
+    path::AbstractString,
+    content_type::AbstractString,
+    content_encoding::AbstractString;
     buffer::Vector{UInt8} = Vector{UInt8}(undef, 2*1024*1024),
 )
     content_length = filesize(path)
