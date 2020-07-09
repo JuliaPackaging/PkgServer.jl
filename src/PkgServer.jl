@@ -101,6 +101,10 @@ function start(;kwargs...)
                 serve_meta_stats(http)
                 return
             end
+            if resource == "/meta/siblings"
+                serve_siblings(http)
+                return
+            end
 
             if resource  == "/registries"
                 serve_file(http, joinpath(config.root, "static", "registries"), "application/toml", "identity")

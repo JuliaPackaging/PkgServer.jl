@@ -57,6 +57,14 @@ end
     @test haskey(meta, "pkgserver_url")
     @test meta["pkgserver_url"] == "https://pkg.julialang.org"
 
+    # Also hit the `/meta/siblings` endpoint
+    response = HTTP.get("$(server_url)/meta/siblings")
+    @test response.status == 200
+    siblings = collect(JSON3.read(String(response.body)))
+    @test "https://us-west.pkg.julialang.org" in siblings
+    @test "https://in.pkg.julialang.org" in siblings
+    @test "https://au.pkg.julialang.org" in siblings
+
     # Ensure that some random URL gets a 404
     @test_throws HTTP.ExceptionRequest.StatusError HTTP.get("$(server_url)/docs")
 end

@@ -42,6 +42,28 @@ function get_pkgserver_url()
     return pkgserver_url[]
 end
 
+# Return all officially-run PkgServer instances we know about
+function get_pkgserver_siblings()
+    regions = [
+        # North America
+        "us-west",
+        "us-east",
+        # Europe
+        "eu-central",
+        # Asia
+        "in",
+        "kr",
+        "sg",
+        # Special Chinese servers, serving from within-country
+        "cn-southeast",
+        "cn-east",
+        "cn-northeast",
+        # Australia
+        "au",
+    ]
+    return [string("https://", region, ".pkg.julialang.org") for region in regions]
+end
+
 function get_num_hashnamed_files(dir)
     # If this directory doesn't exist, then we haven't cached anything!
     if !isdir(dir)
@@ -96,7 +118,7 @@ function get_num_artifacts_cached()
     num_artifacts_cached = get_num_hashnamed_files(joinpath(config.cache.root, "artifact"))
 end
 
-function serve_json(http::HTTP.Stream, data::Dict)
+function serve_json(http::HTTP.Stream, data)
     json = JSON3.write(data)
     HTTP.setheader(http, "Content-Length" => string(length(json)))
     HTTP.setheader(http, "Content-Type" => "application/json")
@@ -132,4 +154,8 @@ function serve_meta_stats(http::HTTP.Stream)
         "total_misses" => total_misses,
     )
     return serve_json(http, stats)
+end
+
+function serve_siblings(http::HTTP.Stream)
+    return serve_json(http, get_pkgserver_siblings())
 end
