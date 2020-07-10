@@ -7,6 +7,9 @@ WORKDIR /app
 RUN mkdir /depot
 ENV JULIA_DEPOT_PATH="/depot"
 
+# While we're trying to debug issues, load in some helpful tools
+RUN apt update && apt install -y gdb procps
+
 # Copy in Project.toml/Manifest.toml, instantiate immediately, so that we don't have to do this
 # every time we rebuild, since those files should change relatively slowly.
 ADD *.toml /app/
