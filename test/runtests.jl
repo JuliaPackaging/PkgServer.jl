@@ -1,5 +1,4 @@
-using PkgServer, Pkg, HTTP, JSON3, Tar
-using Test
+using PkgServer, Pkg, Pkg.TOML, HTTP, JSON3, Tar, Test
 
 # You can either perform the following setup:
 #  - Already-running PkgServer, located at $JULIA_PKG_SERVER

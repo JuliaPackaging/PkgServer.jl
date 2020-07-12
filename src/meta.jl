@@ -33,6 +33,37 @@ function get_pkgserver_version()
     return pkgserver_version[]
 end
 
+# Return the fully-qualified domain name of this server, if set.
+const pkgserver_url = Ref{Union{Nothing,String}}(nothing)
+function get_pkgserver_url()
+    if pkgserver_url[] === nothing
+        pkgserver_url[] = string("https://", get(ENV, "JULIA_PKG_SERVER_FQDN", "pkg.julialang.org"))
+    end
+    return pkgserver_url[]
+end
+
+# Return all officially-run PkgServer instances we know about
+function get_pkgserver_siblings()
+    regions = [
+        # North America
+        "us-west",
+        "us-east",
+        # Europe
+        "eu-central",
+        # Asia
+        "in",
+        "kr",
+        "sg",
+        # Special Chinese servers, serving from within-country
+        "cn-southeast",
+        "cn-east",
+        "cn-northeast",
+        # Australia
+        "au",
+    ]
+    return [string("https://", region, ".pkg.julialang.org") for region in regions]
+end
+
 function get_num_hashnamed_files(dir)
     # If this directory doesn't exist, then we haven't cached anything!
     if !isdir(dir)
@@ -87,7 +118,7 @@ function get_num_artifacts_cached()
     num_artifacts_cached = get_num_hashnamed_files(joinpath(config.cache.root, "artifact"))
 end
 
-function serve_json(http::HTTP.Stream, data::Dict)
+function serve_json(http::HTTP.Stream, data)
     json = JSON3.write(data)
     HTTP.setheader(http, "Content-Length" => string(length(json)))
     HTTP.setheader(http, "Content-Type" => "application/json")
@@ -99,6 +130,7 @@ function serve_meta(http::HTTP.Stream)
     # We serve a JSON representation of some metadata about this PkgServer
     metadata = Dict(
         "pkgserver_version" => get_pkgserver_version(),
+        "pkgserver_url" => get_pkgserver_url(),
         "julia_version" => string(VERSION),
         "start_time" => string(time_start),
         "last_registry_update" => string(last_registry_update),
@@ -122,4 +154,8 @@ function serve_meta_stats(http::HTTP.Stream)
         "total_misses" => total_misses,
     )
     return serve_json(http, stats)
+end
+
+function serve_siblings(http::HTTP.Stream)
+    return serve_json(http, get_pkgserver_siblings())
 end

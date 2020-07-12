@@ -54,9 +54,30 @@ end
     meta = JSON3.read(String(response.body))
     @test haskey(meta, "pkgserver_version")
     @test meta["pkgserver_version"] == PkgServer.get_pkgserver_version()
+    @test haskey(meta, "pkgserver_url")
+    @test meta["pkgserver_url"] == "https://pkg.julialang.org"
+
+    # Also hit the `/meta/siblings` endpoint
+    response = HTTP.get("$(server_url)/meta/siblings")
+    @test response.status == 200
+    siblings = collect(JSON3.read(String(response.body)))
+    @test "https://us-west.pkg.julialang.org" in siblings
+    @test "https://in.pkg.julialang.org" in siblings
+    @test "https://au.pkg.julialang.org" in siblings
 
     # Ensure that some random URL gets a 404
     @test_throws HTTP.ExceptionRequest.StatusError HTTP.get("$(server_url)/docs")
+
+    # Test a dynamically-generated artifact TOML
+    art_tree_hash = "4ed4e6caa3c4559f34d9eafd2f42e9863f83b573"
+    art_name = "Xorg_xineramaproto"
+    response = HTTP.get("$(server_url)/artifact/$(art_tree_hash)/$(art_name)")
+    @test response.status == 200
+    art_toml = TOML.parse(String(response.body))
+    @test haskey(art_toml, art_name)
+    @test haskey(art_toml[art_name], "git-tree-sha1")
+    @test art_toml[art_name]["git-tree-sha1"] == art_tree_hash
+    @test haskey(art_toml[art_name], "download")
 end
 
 function with_depot_path(f::Function, dp::Vector{String})
@@ -121,8 +142,8 @@ end
 end
 
 @testset "Access Tracking" begin
-    # Test that the `/stats` endpoint works as expected
-    response = HTTP.get("$(server_url)/stats")
+    # Test that the `/meta/stats` endpoint works as expected
+    response = HTTP.get("$(server_url)/meta/stats")
     @test response.status == 200
     stats = JSON3.read(String(response.body))
     @test haskey(stats, "packages_cached")
@@ -141,7 +162,7 @@ end
     end
 
     # Refresh the stats
-    response = HTTP.get("$(server_url)/stats")
+    response = HTTP.get("$(server_url)/meta/stats")
     @test response.status == 200
     stats = JSON3.read(String(response.body))
 
@@ -167,6 +188,7 @@ end
         @test HTTP.head("$(server_url)/artifact/$(art_yskip_hash)").status == 200
     end
 end
+
 @testset "Partial Content" begin
     # Example@0.5.3
     uuid = "7876af07-990d-54b4-ab0e-23690620f79a"
