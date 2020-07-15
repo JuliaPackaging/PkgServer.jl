@@ -18,7 +18,11 @@ latest treehash.
 """
 function get_registries(server::AbstractString)
     regs = Dict{String,String}()
-    response = HTTP.get("$server/registries")
+    response = HTTP.get("$server/registries", status_exception = false)
+    if response.status != 200
+        @error("Failure to fetch /registries", server, response.status)
+        return regs
+    end
     for line in eachline(IOBuffer(response.body))
         m = match(registry_re, line)
         if m !== nothing
@@ -26,7 +30,7 @@ function get_registries(server::AbstractString)
             uuid in keys(config.registries) || continue
             regs[uuid] = hash
         else
-            @error "invalid response" server=server resource="registries" line=line
+            @error("invalid response", server, resource="registries", line)
         end
     end
     return regs
