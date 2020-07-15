@@ -12,10 +12,12 @@ import Dates: DateTime, now
 import Pkg
 import Pkg.TOML
 import Pkg.Artifacts: download_artifact, artifact_path, artifact_names
+import Pkg.PlatformEngines: download_verify_unpack, probe_platform_engines!
 import Tar
 import TranscodingStreams: TranscodingStream
 import CodecZlib: GzipCompressor, GzipDecompressor
 
+probe_platform_engines!()
 mkpath(clones_dir)
 mkpath(static_dir)
 mkpath(blacklist_dir)
@@ -139,12 +141,12 @@ function process_artifact(info::Dict)
         haskey(info, "download") || return
         downloads = info["download"]
         downloads isa Array || (downloads = [downloads])
+        tree_path = artifact_path(tree_sha1, honor_overrides=false)
         for download in downloads
             url = download["url"]
             hash = download["sha256"]
-            download_artifact(tree_sha1, url, hash, verbose=true) && break
+            download_verify_unpack(url, hash, tree_path; verbose=true, force=true) && break
         end
-        tree_path = artifact_path(tree_sha1, honor_overrides=false)
         if !isdir(tree_path)
             blacklist(tree_hash)
             error("artifact install failed")
