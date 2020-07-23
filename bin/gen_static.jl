@@ -12,10 +12,12 @@ import Dates: DateTime, now
 import Pkg
 import Pkg.TOML
 import Pkg.Artifacts: download_artifact, artifact_path, artifact_names
+import Pkg.PlatformEngines: download_verify_unpack, probe_platform_engines!
 import Tar
 import TranscodingStreams: TranscodingStream
 import CodecZlib: GzipCompressor, GzipDecompressor
 
+probe_platform_engines!()
 mkpath(clones_dir)
 mkpath(static_dir)
 mkpath(blacklist_dir)
@@ -139,12 +141,12 @@ function process_artifact(info::Dict)
         haskey(info, "download") || return
         downloads = info["download"]
         downloads isa Array || (downloads = [downloads])
+        tree_path = artifact_path(tree_sha1, honor_overrides=false)
         for download in downloads
             url = download["url"]
             hash = download["sha256"]
-            download_artifact(tree_sha1, url, hash, verbose=true) && break
+            download_verify_unpack(url, hash, tree_path; verbose=true, force=true) && break
         end
-        tree_path = artifact_path(tree_sha1, honor_overrides=false)
         if !isdir(tree_path)
             blacklist(tree_hash)
             error("artifact install failed")
@@ -192,6 +194,55 @@ function killpg(pgid::Cint, sig=Base.SIGTERM)
 end
 killpg(p::Base.Process, sig=Base.SIGTERM) = killpg(getsid(p), sig)
 
+"""
+    run_with_timeout(cmd, timeout = 600, term_timeout=10)
+
+Run a command.  After `timeout` seconds, sends `SIGTERM` to the process.
+After `term_timeout` seconds, sends `SIGKILL` to the process.  If the process
+is not successful, throws an error.
+"""
+function run_with_timeout(cmd::Cmd, timeout = 600.0, term_timeout = 10.0)
+    out = Pipe()
+    err = Pipe()
+    process = run(pipeline(detach(cmd), stdout=out, stderr=err); wait=false)
+    close(out.in)
+    close(err.in)
+
+    # Start asynchronous task to get all stdout and stderr data
+    out_task = @async String(read(out))
+    err_task = @async String(read(err))
+
+    timeout_start = time()
+    while process_running(process)
+        sleep(.1)
+        elapsed = (time() - timeout_start)
+        if elapsed > timeout
+            @warn("Terminating long-running command", cmd, elapsed)
+            killpg(process)
+
+            # Wait for the SIGTERM to get responded to
+            term_start = time()
+            while process_running(process)
+                sleep(.1)
+                term_elapsed = time() - term_start
+                if time() - term_start > term_timeout
+                    @warn("Killing long-running command", cmd, elapsed, term_elapsed)
+                    killpg(process, Base.SIGKILL)
+                    wait(process)
+                    break
+                end
+            end
+        end
+    end
+    if !success(process)
+        stdout = fetch(out_task)
+        stderr = fetch(err_task)
+        @warn("Failed command", cmd, stdout, stderr)
+        error("Failed command")
+    end
+    return nothing
+end
+
 for depot in DEPOT_PATH
     depot_regs = joinpath(depot, "registries")
     isdir(depot_regs) || continue
@@ -230,41 +281,19 @@ for depot in DEPOT_PATH
             clone_dir = joinpath(clones_dir, uuid)
             updated = false
             if !isdir(clone_dir)
+                is_clone_failure = false
                 try
-                   timeout_start = time()
-                   timeout = 720
-                   kill_timeout = 60
-                   # Run this process detached, so it gets its own process group
-                   process = run(detach(`git clone --mirror $pkg_repo $clone_dir`), wait = false)
-
-                   is_clone_failure = false
-                   @info "($pc/$total_packages) Cloning in process...", name, pkg_repo
-                   while process_running(process)
-                       elapsed = (time() - timeout_start)
-                       if elapsed > timeout
-                           @warn("Terminating cloning $pkg_repo")
-                           killpg(process)
-                           start_time = time()
-                           while process_running(process)
-                               @debug "waiting for process to terminate"
-                               if time() - start_time > kill_timeout
-                                   @debug("Killing $name")
-                                   sleep(1)
-                                   killpg(process, Base.SIGKILL)
-                                   is_clone_failure = true
-                               end
-                           end
-                           @warn "Unable to clone $pkg_repo: skipping"
-                           is_clone_failure = true
-                       end
-                       sleep(1)
-                   end
-                   is_clone_failure && continue
-                catch err
-                    print_exception(err)
-                    println(stderr, "Cannot clone $name [$uuid]")
-                    break
+                    @info("($pc/$total_packages) Cloning in process...", name, pkg_repo)
+                    run_with_timeout(`git clone --mirror $pkg_repo $clone_dir`)
+                catch e
+                    if isa(e, InterruptException)
+                        rethrow(e)
+                    end
+                    print_exception(e)
+                    @warn "Unable to clone $name [$uuid] from $pkg_repo"
+                    is_clone_failure = true
                 end
+                is_clone_failure && continue
                 updated = true
             end
             for (ver, info) in versions
@@ -288,9 +317,14 @@ for depot in DEPOT_PATH
                             continue
                         end
                         updated = true
-                        try run(`git -C $clone_dir remote update`)
-                        catch err
-                            println(stderr, "Cannot update $name [$uuid]")
+                        try
+                            run_with_timeout(`git -C $clone_dir remote update`)
+                        catch e
+                            if isa(e, InterruptException)
+                                rethrow(e)
+                            end
+                            print_exception(e)
+                            @warn "Unable to update $name [$uuid]"
                             continue
                         end
                         @goto again
