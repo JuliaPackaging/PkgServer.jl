@@ -12,7 +12,7 @@ services:
         environment:
             JULIA_PKG_SERVER: "0.0.0.0:8000"
             JULIA_PKG_SERVER_FQDN: "$FQDN"
-            JULIA_PKG_SERVER_STORAGE_SERVERS: "https://us-east.storage.julialang.org,https://kr.storage.julialang.org"
+            JULIA_PKG_SERVER_STORAGE_SERVERS: "https://us-east.storage.juliahub.com,https://kr.storage.juliahub.com"
             JULIA_PKG_SERVER_STORAGE_ROOT: "/app/storage"
             JULIA_PKG_SERVER_LOGS_DIR: "/app/logs"
         labels:
