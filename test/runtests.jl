@@ -38,6 +38,9 @@ finally
         kill(server_process)
         wait(server_process)
         @info("Outputting testing PkgServer logs:")
-        run(`cat $(temp_dir)/logs/pkgserver.log`)
+        for f in filter(f -> endswith(f, "-pkgserver.log"), readdir("$(temp_dir)/logs"; join=true))
+            println("$(f):")
+            print(read(f))
+        end
     end    
 end

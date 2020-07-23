@@ -28,7 +28,15 @@ timestamp_logger(logger) = TransformerLogger(logger) do log
 end
 
 global_logger(TeeLogger(
-    timestamp_logger(FileLogger(joinpath(log_dir, "pkgserver.log"); append=true)),
+    timestamp_logger(
+        MinLevelLogger(
+            DatetimeRotatingFileLogger(
+                log_dir,
+                string(raw"yyyy-mm-dd-\p\k\g\s\e\r\v\e\r.\l\o\g"),
+            ),
+            Logging.Info,
+        ),
+    ),
     current_logger(),
 ))
 
