@@ -15,6 +15,7 @@ before_script:
     - if [ ${USE_DOCKER} = 1 ]; then
         docker build -t juliapackaging/pkgserver.jl .;
         make -C deployment up;
+        make -C deployment stop-watchtower;
         (make -C deployment logs &);
         export JULIA_PKG_SERVER="http://localhost:8000";
         export JULIA_PKG_SERVER_STORAGE_ROOT=$(pwd)/deployment/storage;

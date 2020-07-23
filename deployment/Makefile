@@ -17,6 +17,9 @@ export UID
 up: storage logs/nginx logs/pkgserver
 	docker-compose up --build --remove-orphans -d
 
+stop-watchtower:
+	docker-compose stop watchtower
+
 storage:
 	mkdir -p $@
 logs/nginx:
