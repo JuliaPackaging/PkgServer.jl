@@ -122,7 +122,9 @@ function serve_json(http::HTTP.Stream, data)
     json = JSON3.write(data)
     HTTP.setheader(http, "Content-Length" => string(length(json)))
     HTTP.setheader(http, "Content-Type" => "application/json")
-    startwrite(http)
+    if http.message.method == "GET"
+        startwrite(http)
+    end
     return write(http, json)
 end
 
