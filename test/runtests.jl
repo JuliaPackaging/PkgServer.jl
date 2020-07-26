@@ -40,7 +40,7 @@ finally
         @info("Outputting testing PkgServer logs:")
         for f in filter(f -> endswith(f, "-pkgserver.log"), readdir("$(temp_dir)/logs"; join=true))
             println("$(f):")
-            print(read(f))
+            print(String(read(f)))
         end
     end    
 end
