@@ -429,18 +429,20 @@ function serve_file(
     # Account this hit
     global total_hits += 1
 
-    # Open the path, write it out directly to the HTTP stream in chunks
-    open(path) do io
-        seek(io, startbyte)
-        t = 0
-        while t < content_length
-            # See JuliaLang/julia#36300, can be optimized later to only read r bytes
-            # r = min(length(buffer), content_length - t)
-            n = readbytes!(io, buffer, #=r=#)
-            t += write(http, view(buffer, 1:min(n, content_length - t)))
-        end
-        if t != content_length
-            @error "file size mismatch" path stat_size=content_length actual=t
+    if http.message.method == "GET"
+        # Open the path, write it out directly to the HTTP stream in chunks
+        open(path) do io
+            seek(io, startbyte)
+            t = 0
+            while t < content_length
+                # See JuliaLang/julia#36300, can be optimized later to only read r bytes
+                # r = min(length(buffer), content_length - t)
+                n = readbytes!(io, buffer, #=r=#)
+                t += write(http, view(buffer, 1:min(n, content_length - t)))
+            end
+            if t != content_length
+                @error "file size mismatch" path stat_size=content_length actual=t
+            end
         end
     end
 end
