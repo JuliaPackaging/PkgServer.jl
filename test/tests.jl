@@ -169,6 +169,16 @@ end
     # Ensure that the counter went up, and that the timing has advanced:
     @test stats["lru"][figlet_fonts_resource]["num_accessed"] >= figlet_fonts_entry["num_accessed"] + 5
     @test stats["lru"][figlet_fonts_resource]["last_accessed"] > figlet_fonts_entry["last_accessed"]
+
+    # Test that payload bytes received and transmitted are both nonzero,
+    # and that (since we've served the same resources multiple times) the
+    # latter is greater than the former
+    @test haskey(stats, "payload_bytes_received")
+    @test stats["payload_bytes_received"] > 0
+    @test haskey(stats, "payload_bytes_transmitted")
+    @test stats["payload_bytes_transmitted"] > 0
+    @test stats["payload_bytes_transmitted"] > stats["payload_bytes_received"]
+
 end
 
 @testset "Skip-nonskip ambiguity testing" begin

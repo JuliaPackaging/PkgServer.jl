@@ -13,6 +13,10 @@ cached_hits = Int64(0)
 fetch_hits = Int64(0)
 # Total misses: incremented in start()
 total_misses = Int64(0)
+# Total payload bytes received from StorageServers
+payload_bytes_received = Int64(0)
+# Total payload bytes transmitted to clients
+payload_bytes_transmitted = Int64(0)
 
 
 ## Functions to serve metadata about the PkgServer itself
@@ -154,6 +158,8 @@ function serve_meta_stats(http::HTTP.Stream)
         "cached_hits" => cached_hits,
         "fetch_hits" => fetch_hits,
         "total_misses" => total_misses,
+        "payload_bytes_received" => payload_bytes_received,
+        "payload_bytes_transmitted" => payload_bytes_transmitted,
     )
     return serve_json(http, stats)
 end

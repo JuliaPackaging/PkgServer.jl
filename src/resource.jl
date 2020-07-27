@@ -296,7 +296,6 @@ function tee_task(io_in, io_outs...)
             total_size = 0
             while !eof(io_in)
                 chunk = readavailable(io_in)
-                #@info(name, len=length(chunk), total=total_size)
                 total_size += length(chunk)
                 for io_out in io_outs
                     write(io_out, chunk)
@@ -305,6 +304,7 @@ function tee_task(io_in, io_outs...)
             for io_out in io_outs
                 close(io_out)
             end
+            return total_size
         end
     end
 end
@@ -358,8 +358,10 @@ function download(server::AbstractString, resource::AbstractString)
             return false
         end
 
-        # Wait for the tee tasks to finish
-        wait(http_tee_task)
+        # Wait for the tee tasks to finish, fetching the result from the
+        # http_tee_task, since it tells us how many payload bytes we just
+        # read from the storage server.
+        global payload_bytes_received += fetch(http_tee_task)
         wait(tar_tee_task)
 
         # Fetch the result of the tarball hash check
@@ -438,7 +440,9 @@ function serve_file(
                 # See JuliaLang/julia#36300, can be optimized later to only read r bytes
                 # r = min(length(buffer), content_length - t)
                 n = readbytes!(io, buffer, #=r=#)
-                t += write(http, view(buffer, 1:min(n, content_length - t)))
+                bytes_written = write(http, view(buffer, 1:min(n, content_length - t)))
+                t += bytes_written
+                global payload_bytes_transmitted += bytes_written
             end
             if t != content_length
                 @error "file size mismatch" path stat_size=content_length actual=t
