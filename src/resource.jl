@@ -145,6 +145,7 @@ function update_registries()
             resource = "/registry/$uuid/$hash"
 
             # If this hash is not already on the filesystem, we might need to fetch it!
+            hash_servers = sort!(hash_info[hash])
             if !isfile(resource_filepath(resource))
                 # check that the origin repo knows about this hash.  This prevents a
                 # rogue storage server from serving malicious registry tarballs.
@@ -152,7 +153,6 @@ function update_registries()
                     @debug("rejecting untrusted registry hash", uuid, hash)
                     continue
                 end
-                hash_servers = sort!(hash_info[hash])
                 if fetch_resource(resource, servers=hash_servers) === nothing
                     continue
                 end
