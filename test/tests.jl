@@ -151,7 +151,7 @@ end
     @test haskey(stats, "artifacts_cached")
     @test stats["artifacts_cached"] >= 30
 
-    # Find "/registries" endpoint, hit it a couple of times, ensure that the LRU count goes up each time
+    # Find figlet fonts endpoint, hit it a couple of times, ensure that the LRU count goes up each time
     figlet_fonts_resource = "artifact/125ac0315d68bbb612f8c2189ea83401f73238f0"
     figlet_fonts_entry = stats["lru"][figlet_fonts_resource]
     @test figlet_fonts_entry["num_accessed"] > 0
