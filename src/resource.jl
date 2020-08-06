@@ -137,25 +137,27 @@ function update_registries()
                 push!(hash_servers, server)
             end
         end
-        hashes = sort!(collect(keys(hash_info)))
+        # Sort hashes by number of servers that know about it, to
+        # serve the "newest" hashes first.
+        hashes = collect(keys(hash_info))
         sort!(hashes, by = hash -> length(hash_info[hash]))
         for hash in hashes
-            # If the hash already exists locally, skip forward quick
             resource = "/registry/$uuid/$hash"
-            if isfile(resource_filepath(resource))
-                continue
+
+            # If this hash is not already on the filesystem, we might need to fetch it!
+            if !isfile(resource_filepath(resource))
+                # check that the origin repo knows about this hash.  This prevents a
+                # rogue storage server from serving malicious registry tarballs.
+                if !verify_registry_hash(uuid, hash)
+                    @debug("rejecting untrusted registry hash", uuid, hash)
+                    continue
+                end
+                hash_servers = sort!(hash_info[hash])
+                if fetch_resource(resource, servers=hash_servers) === nothing
+                    continue
+                end
             end
 
-            # check that the origin repo knows about this hash.  This prevents a
-            # rogue storage server from serving malicious registry tarballs.
-            if !verify_registry_hash(uuid, hash)
-                @debug("rejecting untrusted registry hash", uuid, hash)
-                continue
-            end
-
-            # try hashes known to fewest servers first, ergo newest
-            hash_servers = sort!(hash_info[hash])
-            fetch_resource("/registry/$uuid/$hash", servers=hash_servers) !== nothing || continue
             if config.registries[uuid].latest_hash != hash
                 @info("new current registry hash", uuid, hash, hash_servers)
                 changed = true
@@ -166,6 +168,7 @@ function update_registries()
             break
         end
     end
+
     # write new registry info to file
     registries_path = joinpath(config.root, "static", "registries")
     if changed || !isfile(registries_path)
