@@ -334,9 +334,9 @@ function download(server::AbstractString, resource::AbstractString)
         #     identified by the `skip_empty` version of the hash, store it under both.
 
         # Backing buffers for `tee` nodes
-        http_buffio = BufferStream()
-        tar_skip_buffio = BufferStream()
-        tar_noskip_buffio = BufferStream()
+        http_buffio = BufferStream(16*1024*1024)
+        tar_skip_buffio = BufferStream(16*1024*1024)
+        tar_noskip_buffio = BufferStream(16*1024*1024)
 
         # Create gzip process to decompress for us, using `gzip()` from `Gzip_jll`
         gzip_proc = gzip(gz -> open(`$gz -d`, read=true, write=true))

@@ -31,9 +31,9 @@ version = "1.10.0+0"
 
 [[HTTP]]
 deps = ["Base64", "Dates", "IniFile", "MbedTLS", "Sockets"]
-git-tree-sha1 = "eca61b35cdd8cd2fcc5eec1eda766424a995b02f"
+git-tree-sha1 = "2ac03263ce44be4222342bca1c51c36ce7566161"
 uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
-version = "0.8.16"
+version = "0.8.17"
 
 [[IniFile]]
 deps = ["Test"]
@@ -47,9 +47,9 @@ uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 
 [[JSON3]]
 deps = ["Dates", "Mmap", "Parsers", "StructTypes", "UUIDs"]
-git-tree-sha1 = "3fd82840644fcbc1179a45b122a356e360331b6f"
+git-tree-sha1 = "44c9e48f096015a75386d52cfa83b8607edff257"
 uuid = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
-version = "1.1.0"
+version = "1.1.1"
 
 [[LibGit2]]
 deps = ["Printf"]
@@ -88,9 +88,9 @@ uuid = "a63ad114-7e13-5084-954f-fe012c677804"
 
 [[Parsers]]
 deps = ["Dates", "Test"]
-git-tree-sha1 = "10134f2ee0b1978ae7752c41306e131a684e1f06"
+git-tree-sha1 = "8077624b3c450b15c087944363606a6ba12f925e"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
-version = "1.0.7"
+version = "1.0.10"
 
 [[Pkg]]
 deps = ["Dates", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "UUIDs"]
@@ -115,11 +115,9 @@ uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 
 [[SimpleBufferStream]]
-git-tree-sha1 = "e4b502bd4af092d3a8f0005c03942252fa0a43ce"
-repo-rev = "master"
-repo-url = "https://github.com/staticfloat/SimpleBufferStream.jl"
+git-tree-sha1 = "874e8867b33a00e784c8a7e4b60afe9e037b74e1"
 uuid = "777ac1f9-54b0-4bf8-805c-2214025038e7"
-version = "1.0.0"
+version = "1.1.0"
 
 [[Sockets]]
 uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
@@ -132,11 +130,11 @@ version = "1.1.0"
 
 [[Tar]]
 deps = ["ArgTools", "Logging", "SHA"]
-git-tree-sha1 = "28fd0c114a936fabaa545ca97647642977509999"
+git-tree-sha1 = "76fe95a829d0ad9ccdc1b5468ca5329e72ca388b"
 repo-rev = "master"
 repo-url = "https://github.com/JuliaIO/Tar.jl.git"
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
-version = "1.6.0"
+version = "1.6.1"
 
 [[Test]]
 deps = ["Distributed", "InteractiveUtils", "Logging", "Random"]

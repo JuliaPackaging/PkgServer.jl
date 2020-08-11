@@ -22,6 +22,7 @@ Tar = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
 
 [compat]
 HTTP = "0.8"
+SimpleBufferStream = "1.1"
 julia = "1.4"
 
 [extras]
