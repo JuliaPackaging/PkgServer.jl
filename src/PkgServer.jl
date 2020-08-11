@@ -64,6 +64,9 @@ struct ServerConfig
     end
 end
 
+# Initialize a default config that will get overridden by `start()` below
+global config = ServerConfig()
+
 function __init__()
     # Set default HTTP useragent
     HTTP.setuseragent!("PkgServer (HTTP.jl)")
