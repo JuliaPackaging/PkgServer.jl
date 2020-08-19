@@ -110,7 +110,7 @@ function start(;kwargs...)
             end
 
             if resource  == "/registries"
-                serve_file(http, joinpath(config.root, "static", "registries"), "application/toml", "identity")
+                serve_file(http, joinpath(config.root, "static", "registries"), "text/plain", "identity")
                 return
             end
 
