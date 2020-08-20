@@ -70,9 +70,9 @@ of `f()` is `false` or an exception is raised, the write will be aborted.
 Also tracks the file with the global LRU cache as configured in `config.cache`.
 """
 function write_atomic_lru(f::Function, resource::AbstractString)
-    # First, write a temp file into the `temp` directory:
-    temp_file = joinpath(config.root, "temp", string(resource[2:end], ".tmp.", randstring()))
+    temp_file = temp_resource_filepath(resource)
     try
+        # First, write a temp file into the `temp` directory:
         mkpath(dirname(temp_file))
         retval = open(temp_file, "w") do io
             f(temp_file, io)
@@ -83,6 +83,7 @@ function write_atomic_lru(f::Function, resource::AbstractString)
             new_path = add!(config.cache, resource[2:end], filesize(temp_file))
             mv(temp_file, new_path; force=true)
         end
+        return retval
     catch e
         rethrow(e)
     finally
@@ -95,6 +96,11 @@ function resource_filepath(resource::AbstractString)
     # We strip off the leading `/` to pass this into the filecache
     return filepath(config.cache, resource[2:end])
 end
+
+function temp_resource_filepath(resource::AbstractString)
+    return joinpath(config.root, "temp", string(resource[2:end], ".inprogress"))
+end
+
 
 """
     url_exists(url)
@@ -153,9 +159,14 @@ function update_registries()
                     @debug("rejecting untrusted registry hash", uuid, hash)
                     continue
                 end
-                if fetch_resource(resource, servers=hash_servers) === nothing
+
+                # Try to fetch from our servers, but if something goes wrong, continue
+                dl_state = fetch_resource(resource, servers=hash_servers)
+                if dl_state === nothing
                     continue
                 end
+                # If nothing went wrong, pause and wait for the download to finish.
+                wait(dl_state.dl_task)
             end
 
             if config.registries[uuid].latest_hash != hash
@@ -173,115 +184,173 @@ function update_registries()
     registries_path = joinpath(config.root, "static", "registries")
     if changed || !isfile(registries_path)
         new_registries = joinpath(config.root, "temp", "registries.tmp." * randstring())
+        mkpath(dirname(new_registries))
         open(new_registries, "w") do io
             for uuid in sort!(collect(keys(config.registries)))
                 println(io, "/registry/$(uuid)/$(config.registries[uuid].latest_hash)")
             end
         end
+        mkpath(dirname(registries_path))
         mv(new_registries, registries_path; force=true)
     end
     return changed
 end
 
-const fetch_locks = 1024
-const FETCH_SEED = rand(UInt)
-const FETCH_LOCKS = [ReentrantLock() for _ = 1:fetch_locks]
-const FETCH_FAILS = [Set{String}() for _ = 1:fetch_locks]
-const FETCH_DICTS = [Dict{String,Event}() for _ = 1:fetch_locks]
+"""
+    NUM_FETCH_STATES
 
-function fetch_resource(resource::AbstractString; servers=config.storage_servers)
-    if hit!(config.cache, lstrip(resource, '/'))
-        global cached_hits += 1
-        return resource_filepath(resource)
+We shard our fetch state across `NUM_FETCH_STATES` different buckets, so that we can
+theoretically have `M` different requests going at once for different resources, but the
+same resource gets blocked on multiple simultaneous cache misses.  In practice we'll have
+many accidental collisions before truly saturating, but that's fine since the happy path
+(a cache hit) doesn't even need to enter this block, so unnecessary blocking should
+hopefully be quite rare.  In general, we can caluclate the probability of accidental
+blocking by taking the average number of simultaneous cache misses `M` and the number of
+buckets `N` and plugging them into the birthday problem formula:
+
+    prob_blocked(N, M) = 1 - factorial(big(N))/(big(N)^M * factorial(big(N - M)))
+
+Therefore, making the blind assertion that we, on average, suffer two simultaneous
+cache misses, a bucket number of 128 yields an accidental blocking chance of 0.7%.
+That sounds pretty good to me, so 128 it is.
+"""
+const NUM_FETCH_STATES = 128
+
+struct DownloadState
+    # The actual resource (from which we can get the path via `resource_filepath()` and `temp_resource_filepath()`
+    resource::String
+    # Full length of the resource (obtained via the HEAD request to the storage server)
+    content_length::Int
+    # Task that is doing the downloading
+    dl_task::Task
+end
+
+struct FetchState
+    lock::ReentrantLock
+    failed::Set{String}
+    inprogress::Dict{String,DownloadState}
+
+    FetchState() = new(ReentrantLock(), Set{String}(), Dict{String,DownloadState}())
+end
+const FETCH_STATES = [FetchState() for idx in 1:NUM_FETCH_STATES]
+
+function with_fetch_state(f::Function, resource::AbstractString)
+    state_idx = mod1(hash(resource), NUM_FETCH_STATES)
+    state = FETCH_STATES[state_idx]
+    lock(state.lock) do
+        return f(state)
     end
+end
 
+"""
+    select_server(resource, servers)
+
+Given a resource and a list of storage servers, return the storage server that responds
+most quickly to a HEAD request for that storage server, as well as the HEAD response
+itself so that metadata such as the content-length of the resource can be inspected.
+"""
+function select_server(resource::AbstractString, servers::Vector{<:AbstractString}; timeout = 5, retries = 2)
+    function head_req(server, resource)
+        @try_printerror begin
+            response = HTTP.head(
+                string(server, resource);
+                status_exception = false,
+                timeout = timeout,
+                retries = retries,
+            )
+            return server, response
+        end
+    end
+    # Launch one task per server, performing a HEAD request
+    tasks = [@spawn head_req(server, resource) for server in servers]
+
+    # Wait for the first Task that gives us an HTTP 200 OK, returning that server.
+    # If none have it, we return `nothing`. :(
+    while !isempty(tasks)
+        next_task = wait_first(tasks...)
+        deleteat!(tasks, findfirst(t -> t == next_task, tasks))
+        @try_printerror begin
+            server, http_response = fetch(next_task)
+            if http_response.status == 200
+                return server, http_response
+            end
+        end
+    end
+    return nothing, nothing
+end
+
+function content_length(resp::HTTP.Messages.Response)
+    for h in resp.headers
+        if lowercase(h[1]) == "content-length"
+            return parse(Int, h[2])
+        end
+    end
+    return nothing
+end
+
+
+"""
+    fetch_resource(resource::AbstractString; servers=config.storage_servers)
+
+Reaches out to the list of storage servers, requesting `resource` from the server that
+responds with an HTTP 200 OK the fastest.  Downloads on an asynchronous task stored as a
+part of the `DownloadState` structure that this function returns.  Failures to download
+are recorded and future downloads of that same resource will be skipped, until
+`forget_failures()` is called.  The `DownloadState` object contains within it enough
+information to still serve a resource as it is being downloaded in the background task.
+"""
+function fetch_resource(resource::AbstractString; servers::Vector{String}=config.storage_servers)
     if isempty(servers)
-        @error "fetch called with no servers" resource=resource
+        @error("fetch called with no servers", resource)
         error("fetch called with no servers")
     end
 
-    # make sure only one thread fetches each resource
-    i = (hash(resource, FETCH_SEED) % fetch_locks) + 1
-    fetch_lock = FETCH_LOCKS[i]
-    fetch_fails = FETCH_FAILS[i]
-    fetch_dict = FETCH_DICTS[i]
-
-    try
-        lock(fetch_lock)
-
+    # with_fetch_state() will wait for a lock
+    with_fetch_state(resource) do state
         # check if this has failed to download recently
-        if resource in fetch_fails
+        if resource in state.failed
             @debug("skipping recently failed download", resource)
             return nothing
         end
-        # see if any other thread is already downloading
-        if resource in keys(fetch_dict)
-            # another thread is already downloading this resource
-            @debug("waiting for in-progress download", resource)
-            fetch_event = fetch_dict[resource]
 
-            # Release the fetch lock while we're waiting
-            unlock(fetch_lock)
-            wait(fetch_event)
-            lock(fetch_lock)
-
-            # Re-fetch; ideally, this result in a successful `hit!()` immediately.
-            return fetch_resource(resource; servers=servers)
+        # check if this resource is being downloaded already
+        if resource in keys(state.inprogress)
+            @debug("detected in-progress download", resource)
+            return state.inprogress[resource]
         end
 
-        fetch_dict[resource] = Event()
-    finally
-        unlock(fetch_lock)
-    end
+        # If not, let's figure out which storage server we're going to download from:
+        server, response = select_server(resource, servers)
+        if response === nothing
+            @debug("no upstream server", resource, servers)
+            return nothing
+        end
 
-    # this is the only thread fetching the resource
-    success = false
-    path = ""
-    try
-        if length(servers) == 1
-            download(servers[1], resource)
-        else
-            race_lock = ReentrantLock()
-            @sync for server in servers
-                @spawn begin
-                    response = HTTP.head(server * resource, status_exception = false)
-                    if response.status == 200
-                        # the first thread to get here downloads
-                        if trylock(race_lock)
-                            download(server, resource)
-                            unlock(race_lock)
-                        end
-                    end
-                    # TODO: cancel any hung HEAD requests
+        # Launch download process in a separate task:
+        dl_task = @async begin
+            success = download(server, resource)
+            lock(state.lock) do
+                if success
+                    global fetch_hits += 1
+                else
+                    # If the download failed, wait a bit before retrying
+                    push!(state.failed, resource)
                 end
+                # Once downloading is done, remove this resource from the list of inprogress downloads
+                delete!(state.inprogress, resource)
             end
         end
 
-        path = resource_filepath(resource)
-        success = isfile(path)
-
-        # done at last
-        if success
-            global fetch_hits += 1
-            return path
-        end
-        return nothing
-    finally
-        # notify other threads and remove from fetch dict
-        lock(fetch_lock) do
-            if !success
-                push!(fetch_fails, resource)
-                @warn "download failed" resource=resource path=path
-            end
-            notify(pop!(fetch_dict, resource))
-        end
+        # Generate a DownloadState, map that to this resource
+        state.inprogress[resource] = DownloadState(resource, content_length(response), dl_task)
+        return state.inprogress[resource]
     end
 end
 
 function forget_failures()
-    for i = 1:fetch_locks
-        lock(FETCH_LOCKS[i]) do
-            empty!(FETCH_FAILS[i])
+    for idx in 1:NUM_FETCH_STATES
+        lock(FETCH_STATES[idx].lock) do
+            empty!(FETCH_STATES[idx].failed)
         end
     end
 end
@@ -393,14 +462,14 @@ function download(server::AbstractString, resource::AbstractString)
     end
 end
 
-function serve_file(
-    http::HTTP.Stream,
-    path::AbstractString,
-    content_type::AbstractString,
-    content_encoding::AbstractString;
-    buffer::Vector{UInt8} = Vector{UInt8}(undef, 2*1024*1024),
-)
-    content_length = filesize(path)
+function serve_file(http::HTTP.Stream,
+                    io::IO,
+                    content_type::AbstractString,
+                    content_encoding::AbstractString;
+                    buffer::Vector{UInt8} = Vector{UInt8}(undef, 2*1024*1024),
+                    content_length = filesize(io),
+                    dl_task::Task = @async(nothing))
+    # Initialize range parameters
     startbyte, stopbyte = 0, content_length-1
 
     # Support single byte ranges
@@ -427,29 +496,47 @@ function serve_file(
     HTTP.setheader(http, "Content-Length" => string(content_length))
     HTTP.setheader(http, "Accept-Ranges" => "bytes")
     HTTP.setheader(http, "Content-Type" => content_type)
-    content_encoding == "identity" ||
+    if content_encoding != "identity"
         HTTP.setheader(http, "Content-Encoding" => content_encoding)
+    end
     startwrite(http)
 
     # Account this hit
     global total_hits += 1
 
+    # Only write content if the method is `GET` (e.g. `HEAD` requests get the above headers)
     if http.message.method == "GET"
-        # Open the path, write it out directly to the HTTP stream in chunks
-        open(path) do io
+        # Because this file may be an incomplete stream, we need to wait until our start byte is 
+        # ready, so we `sleep` in a loop while we attempt to `seek()`
+        seek(io, startbyte)
+        while position(io) != startbyte
+            sleep(0.01)
             seek(io, startbyte)
-            t = 0
-            while t < content_length
-                # See JuliaLang/julia#36300, can be optimized later to only read r bytes
-                # r = min(length(buffer), content_length - t)
-                n = readbytes!(io, buffer, #=r=#)
+        end
+
+        t = 0
+        while t < content_length
+            # See JuliaLang/julia#36300, can be optimized later to only read r bytes
+            # r = min(length(buffer), content_length - t)
+            n = readbytes!(io, buffer, #=r=#)
+
+            # If we got nothing, either the file is prematurely truncated, or we're streaming it in.
+            if n == 0
+                # If we're still streaming, just sleep for a bit before trying again.
+                if dl_task.state != :done
+                    sleep(0.001)
+                else
+                    # Otherwise, break out. :(
+                    break
+                end
+            else
                 bytes_written = write(http, view(buffer, 1:min(n, content_length - t)))
                 t += bytes_written
                 global payload_bytes_transmitted += bytes_written
             end
-            if t != content_length
-                @error "file size mismatch" path stat_size=content_length actual=t
-            end
+        end
+        if t != content_length
+            @error("file size mismatch", path, content_length, actual=t)
         end
     end
 end
