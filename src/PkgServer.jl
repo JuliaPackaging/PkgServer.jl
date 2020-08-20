@@ -51,6 +51,8 @@ struct ServerConfig
         mkpath(joinpath(storage_root, "static"))
         # Downloads get stored into `temp`
         mkpath(joinpath(storage_root, "temp"))
+        # Files get stored into `cache`
+        mkpath(joinpath(storage_root, "cache"))
         return new(
             storage_root,
             listen_addr,
@@ -110,33 +112,87 @@ function start(;kwargs...)
             end
 
             if resource  == "/registries"
-                serve_file(http, joinpath(config.root, "static", "registries"), "text/plain", "identity")
+                open(joinpath(config.root, "static", "registries")) do io
+                    serve_file(http, io, "text/plain", "identity")
+                end
                 return
             end
 
             # If the user asked for something that is an actual resource, send it directly
             if occursin(resource_re, resource)
-                path = fetch_resource(resource)
-                if path !== nothing
-                    serve_file(http, path, "application/tar",  "gzip")
+                # If the resource already exists locally, yay!  Serve it and quit.
+                resource_path = resource_filepath(resource)
+                io = try_open(resource_path)
+                if io !== nothing
+                    hit!(config.cache, resource[2:end])
+                    serve_file(http, io, "application/tar", "gzip")
+                    close(io)
                     return
+                end
+
+                # If it doesn't exist locally, let's request a fetch on that resource.
+                # This will return either `nothing` (e.g. resource does not exist) or
+                # a `DownloadState` that represents a partial download.
+                dl_state = fetch_resource(resource)
+                if dl_state !== nothing
+                    stream_path = temp_resource_filepath(resource)
+                    # Wait until `stream_path` is created
+                    while !isfile(stream_path) && dl_state.dl_task.state != :done
+                        sleep(0.001)
+                    end
+                    # Try to serve `stream_path` file
+                    stream_io = try_open(stream_path)
+                    if stream_io !== nothing
+                        serve_file(http, stream_io, "application/tar", "gzip";
+                                   content_length=dl_state.content_length,
+                                   dl_task=dl_state.dl_task)
+                        close(stream_io)
+                        return
+                    end
+
+                    # If we couldn't open `stream_path`, it may be because the file finished
+                    # downloading since we last checked 20 lines ago.  Check again.
+                    io = try_open(resource_path)
+                    if io !== nothing
+                        serve_file(http, io, "application/tar", "gzip")
+                        close(io)
+                        return
+                    end
                 end
             end
 
+            # If a user asks for an `Artifacts.toml` for a particular artifact, we'll generate
+            # one for them on the fly.
             m = match(artifact_toml_re, resource)
             if m !== nothing
-                artifact_path = fetch_resource(m.captures[1])
-                if artifact_path !== nothing
-                    serve_artifact_toml(http, artifact_path, m.captures[2])
+                artifact_resource = m.captures[1]
+                artifact_name = m.captures[2]
+
+                # If we don't actually have the artifact locally, we need to fetch it first.
+                artifact_path = resource_filepath(artifact_resource)
+                if !isfile(artifact_path)
+                    dl_state = fetch_resource(artifact_resource)
+                    if dl_state !== nothing
+                        # We actually need to wait for the download to finish so that we can
+                        # calculate the SHA256 hash of the tarball.
+                        wait(dl_state.dl_task)
+                    end
+                end
+
+                # We check again, because it's possible the above download failed.
+                if isfile(artifact_path)
+                    serve_artifact_toml(http, artifact_path, artifact_name)
                     return
                 end
             end
 
             if occursin(r"^/*$", resource)
                 path = joinpath(dirname(@__DIR__), "static", "index.html")
-                if isfile(path)
+                io = try_open(path)
+                if io !== nothing
                     content = ("text/html", "identity")
-                    serve_file(http, path, content...)
+                    serve_file(http, io, content...)
+                    close(io)
                     return
                 end
             end

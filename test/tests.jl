@@ -157,7 +157,8 @@ end
     figlet_fonts_entry = stats["lru"][figlet_fonts_resource]
     @test figlet_fonts_entry["num_accessed"] > 0
 
-    # Now, hit this a couple more times:
+    # Now, hit this a couple more times.  We'll hit it a few more times now, while it's still streaming,
+    # to trigger the streaming codepaths
     for idx in 1:5
         HTTP.get("$(server_url)/$(figlet_fonts_resource)")
     end
@@ -205,6 +206,7 @@ end
     uuid = "7876af07-990d-54b4-ab0e-23690620f79a"
     treehash = "46e44e869b4d90b96bd8ed1fdcf32244fddfb6cc"
     content_url = "$(server_url)/package/$uuid/$treehash"
+    cache_path = joinpath(cache_dir, "package", uuid, treehash)
     # Get full file
     full_resp = HTTP.get(content_url)
     @test full_resp.status == 200
@@ -240,4 +242,12 @@ end
     @test HTTP.header(partial_resp, "Content-Range") == ""
     @test HTTP.header(partial_resp, "Content-Length") == string(full_length)
     @test partial_resp.body == full_resp.body
+
+    # Specifying both startbyte and stopbyte but streaming rather than cached
+    rm(cache_path; force=true)
+    partial_resp = HTTP.get(content_url, ["Range"=>"bytes=0-1023"]);
+    @test partial_resp.status == 206
+    @test HTTP.header(partial_resp, "Content-Range") == "bytes 0-1023/$(full_length)"
+    @test HTTP.header(partial_resp, "Content-Length") == "1024"
+    @test partial_resp.body == full_resp.body[1:1024]
 end

@@ -157,10 +157,18 @@ function serve_meta_stats(http::HTTP.Stream)
         "lru" => config.cache.entries,
         "packages_cached" => get_num_pkgs_cached(),
         "artifacts_cached" => get_num_artifacts_cached(),
-        # Global response statistics
+
+        ## Global response statistics:
+        # Number of requests we've had total.  Should equal `cached_hits + fetch_hits`.
         "total_hits" => total_hits,
+        # Number of requests served through the happy path; file was already present on disk.
         "cached_hits" => cached_hits,
+        # Number of requests that were served by fetching it from the server.
+        # Note; if three simultaneous requests come in for a file that we need to fetch,
+        # we'll only fetch it once, but we'll stream the content back for all three, and
+        # account all three as a `fetch_hit`.
         "fetch_hits" => fetch_hits,
+        # Number of requests that could not be served
         "total_misses" => total_misses,
         "payload_bytes_received" => payload_bytes_received,
         "payload_bytes_transmitted" => payload_bytes_transmitted,
