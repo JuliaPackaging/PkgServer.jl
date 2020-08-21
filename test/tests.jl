@@ -56,6 +56,7 @@ end
     @test meta["pkgserver_version"] == PkgServer.get_pkgserver_version()
     @test haskey(meta, "pkgserver_url")
     @test meta["pkgserver_url"] == "https://pkg.julialang.org"
+    @test meta["registry_update_task"] == "started"
 
     # Also hit the `/meta/siblings` endpoint
     response = HTTP.get("$(server_url)/meta/siblings")
