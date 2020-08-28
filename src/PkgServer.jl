@@ -110,6 +110,10 @@ function start(;kwargs...)
                 serve_siblings(http)
                 return
             end
+            if resource == "/meta/parents"
+                serve_parents(http)
+                return
+            end
 
             if resource  == "/registries"
                 open(joinpath(config.root, "static", "registries")) do io
