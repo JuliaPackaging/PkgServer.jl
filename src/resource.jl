@@ -355,31 +355,6 @@ function forget_failures()
     end
 end
 
-"""
-    tee_task(io_in, io_outs...)
-
-Creates an asynchronous task that reads in from `io_in` in buffer chunks, writing
-available bytes out to all elements of `io_outs` as quickly as possible until `io_in` is
-closed.  Closes all elements of `io_outs` once that is finished.  Returns the `Task`.
-"""
-function tee_task(io_in, io_outs...)
-    return @async begin
-        @try_printerror begin
-            total_size = 0
-            while !eof(io_in)
-                chunk = readavailable(io_in)
-                total_size += length(chunk)
-                for io_out in io_outs
-                    write(io_out, chunk)
-                end
-            end
-            for io_out in io_outs
-                close(io_out)
-            end
-            return total_size
-        end
-    end
-end
 
 """
     stream_file(io_in::IO, start_byte::Int, length::Int, dl_task::Task, io_out::IO)
