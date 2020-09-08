@@ -107,6 +107,25 @@ end
         end
     end
 
+    # Sleep until there's nothing left in the `temp` directory.
+    t_start = time()
+    function any_inprogress_files(temp_dir)
+        for (root, dirs, files) in walkdir(temp_dir)
+            for f in files
+                if endswith(f, ".inprogress")
+                    return true
+                end
+            end
+        end
+        return false
+    end
+    while any_inprogress_files(joinpath(cache_dir, "..", "temp"))
+        sleep(0.1)
+        if time() - t_start >= 10
+            error("Timed out waiting for temp directory to finish")
+        end
+    end
+
     # Test that the resources we expect to exist are in fact cached on the server.
     # We just test that a few UUIDs and tree hashes exist.  Note we use the exact packages
     # listed above, otherwise we may not know what the treehash actually should be.
