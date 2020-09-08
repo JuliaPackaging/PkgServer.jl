@@ -47,9 +47,9 @@ uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 
 [[JSON3]]
 deps = ["Dates", "Mmap", "Parsers", "StructTypes", "UUIDs"]
-git-tree-sha1 = "44c9e48f096015a75386d52cfa83b8607edff257"
+git-tree-sha1 = "18a1a1bcd1070f8e2ef4c5562b7cf74cd1c2607c"
 uuid = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
-version = "1.1.1"
+version = "1.1.2"
 
 [[LibGit2]]
 deps = ["Printf"]
@@ -79,9 +79,9 @@ version = "1.0.2"
 
 [[MbedTLS_jll]]
 deps = ["Libdl", "Pkg"]
-git-tree-sha1 = "a0cb0d489819fa7ea5f9fa84c7e7eba19d8073af"
+git-tree-sha1 = "c0b1286883cac4e2b617539de41111e0776d02e8"
 uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
-version = "2.16.6+1"
+version = "2.16.8+0"
 
 [[Mmap]]
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
