@@ -9,7 +9,7 @@ try
     global host = m.captures[2]
     global port = parse(Int, m.captures[3])
 catch
-    @warn("Invalid JULIA_PKG_SERVER setting, ignoring and using default!")
+    @warn("Invalid JULIA_PKG_SERVER setting, ignoring and using default of 0.0.0.0:8000!")
     global host = "0.0.0.0"
     global port = 8000
 end
