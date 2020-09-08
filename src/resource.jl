@@ -328,7 +328,7 @@ function fetch_resource(resource::AbstractString; servers::Vector{String}=config
 
         # Launch download process in a separate task:
         dl_task = @async begin
-            success = download(server, resource)
+            success = download(server, resource, content_length(response))
             lock(state.lock) do
                 if success
                     global fetch_hits += 1
@@ -381,7 +381,48 @@ function tee_task(io_in, io_outs...)
     end
 end
 
-function download(server::AbstractString, resource::AbstractString)
+"""
+    stream_file(io_in::IO, start_byte::Int, length::Int, dl_task::Task, io_out::IO)
+
+Streams from a file `io_in` to an output `IO` object `io_out`.  Reads from `io_in` until
+the requested `length` bytes are read, or the download task `dl_task` is finished and it
+is certain no more bytes are going to be stored within the file.  Returns the total
+number of bytes read from `io_in` and output into `io_out`.
+"""
+function stream_file(io_in::IO, start_byte::Int, length::Int, dl_task::Task, io_out::IO,
+                     buffer::Vector{UInt8} = Vector{UInt8}(undef, 2*1024*1024))
+    # Because this file may be an incomplete stream, we need to wait until our start byte
+    # is  ready, so we `sleep` in a loop while we attempt to `seek()`
+    seek(io_in, start_byte)
+    while position(io_in) != start_byte
+        sleep(0.01)
+        seek(io_in, start_byte)
+    end
+
+    transmitted = 0
+    while transmitted < length
+        # See JuliaLang/julia#36300, can be optimized later to only read r bytes
+        # r = min(length(buffer), content_length - t)
+        # n = readbytes!(io, buffer, r)
+        n = readbytes!(io_in, buffer)
+
+        # If we got nothing, either the file is prematurely truncated, or we're still downloading it somewhere.
+        if n == 0
+            # If we're still streaming, just sleep for a bit before trying again.
+            if dl_task.state != :done
+                sleep(0.001)
+            else
+                # Otherwise, break out, something went wrong. :/
+                break
+            end
+        else
+            transmitted += write(io_out, view(buffer, 1:min(n, length - transmitted)))
+        end
+    end
+    return transmitted
+end
+
+function download(server::AbstractString, resource::AbstractString, content_length::Int)
     @info "downloading resource" server=server resource=resource
     hash = basename(resource)
 
@@ -394,46 +435,54 @@ function download(server::AbstractString, resource::AbstractString)
         # streaming fashion, so as to minimize latency for the user.
         #
         # We therefore:
-        #   - Stream HTTP request into `http_buffio`
-        #   - tee `http_buffio` into both `file_io`, and `gzip_proc`, to simultaneously
-        #     store it and decompress it for live tree hashing.
+        #   - Stream HTTP request into `file_io`, as fast as it can go.  This is to
+        #     ensure that when we cache miss, we can `cat` out that file to the user
+        #     as quickly as possible.
+        #   - `cat` `file_io` into `gzip_proc`, to decompress it for live tree hashing,
+        #     while `serve_file()` can stream `file_io` out to the client.
         #   - tee `gzip_proc` into two separate `tar_task_*` tasks, to compute the skip-
         #     empty and non-skip-empty hashes simultaneously.
         #   - If either of the hashes match, we keep the file.  If it was originally
         #     identified by the `skip_empty` version of the hash, store it under both.
 
         # Backing buffers for `tee` nodes
-        http_buffio = BufferStream(16*1024*1024)
         tar_skip_buffio = BufferStream(16*1024*1024)
         tar_noskip_buffio = BufferStream(16*1024*1024)
 
         # Create gzip process to decompress for us, using `gzip()` from `Gzip_jll`
         gzip_proc = gzip(gz -> open(`$gz -d`, read=true, write=true))
 
-        # Create tee nodes, one http -> (file, gzip), and one gzip -> (skip, noskip)
-        http_tee_task = tee_task(http_buffio, file_io, gzip_proc.in)
+        # Create tee node splitting gzip -> (skip, noskip)
         tar_tee_task = tee_task(gzip_proc.out, tar_skip_buffio, tar_noskip_buffio)
 
         # Create two tasks to read in the gzip output and do in-tar tree hashing.
         tar_skip_task = @async Tar.tree_hash(tar_skip_buffio; skip_empty=true)
         tar_noskip_task = @async Tar.tree_hash(tar_noskip_buffio; skip_empty=false)
 
-        # Initiate the HTTP request, and let the data flow.
-        response = HTTP.get(server * resource,
+        # Initiate the HTTP request, and start the data flowing into the file
+        http_task = @async HTTP.get(server * resource,
             status_exception = false,
-            response_stream = http_buffio,
+            response_stream = file_io,
         )
 
+        # Read data back out from that file into the decompressor
+        file_read_task = @async begin
+            open(temp_file, read=true) do read_file_io
+                written = stream_file(read_file_io, 0, content_length, http_task, gzip_proc.in)
+                global payload_bytes_received += written
+            end
+            close(gzip_proc.in)
+        end
+
         # Raise warnings about bad HTTP response codes
+        response = fetch(http_task)
         if response.status != 200
             @warn "response status $(response.status)"
             return false
         end
 
-        # Wait for the tee tasks to finish, fetching the result from the
-        # http_tee_task, since it tells us how many payload bytes we just
-        # read from the storage server.
-        global payload_bytes_received += fetch(http_tee_task)
+        # Wait for the file read and tee tasks to finish
+        wait(file_read_task)
         wait(tar_tee_task)
 
         # Fetch the result of the tarball hash check
@@ -506,37 +555,10 @@ function serve_file(http::HTTP.Stream,
 
     # Only write content if the method is `GET` (e.g. `HEAD` requests get the above headers)
     if http.message.method == "GET"
-        # Because this file may be an incomplete stream, we need to wait until our start byte is 
-        # ready, so we `sleep` in a loop while we attempt to `seek()`
-        seek(io, startbyte)
-        while position(io) != startbyte
-            sleep(0.01)
-            seek(io, startbyte)
-        end
-
-        t = 0
-        while t < content_length
-            # See JuliaLang/julia#36300, can be optimized later to only read r bytes
-            # r = min(length(buffer), content_length - t)
-            n = readbytes!(io, buffer, #=r=#)
-
-            # If we got nothing, either the file is prematurely truncated, or we're streaming it in.
-            if n == 0
-                # If we're still streaming, just sleep for a bit before trying again.
-                if dl_task.state != :done
-                    sleep(0.001)
-                else
-                    # Otherwise, break out. :(
-                    break
-                end
-            else
-                bytes_written = write(http, view(buffer, 1:min(n, content_length - t)))
-                t += bytes_written
-                global payload_bytes_transmitted += bytes_written
-            end
-        end
-        if t != content_length
-            @error("file size mismatch", path, content_length, actual=t)
+        transmitted = stream_file(io, startbyte, content_length, dl_task, http, buffer)
+        global payload_bytes_transmitted += transmitted
+        if transmitted != content_length
+            @error("file size mismatch", path, content_length, actual=transmitted)
         end
     end
 end
