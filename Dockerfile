@@ -1,3 +1,4 @@
+# Keep in sync with .travis.yml and pkg-update.yml
 FROM julia:1.5
 
 # This Dockerfile must be built with a context of the top-level PkgServer.jl directory

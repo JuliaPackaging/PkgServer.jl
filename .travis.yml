@@ -1,5 +1,6 @@
 language: julia
 julia:
+  # Keep in sync with the Dockerfile and pkg-update.yml
   - 1.5
 notifications:
     email: false
