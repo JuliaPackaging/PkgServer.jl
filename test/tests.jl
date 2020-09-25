@@ -66,6 +66,10 @@ end
     @test "https://in.pkg.julialang.org" in siblings
     @test "https://au.pkg.julialang.org" in siblings
 
+    response = HTTP.get("$(server_url)/robots.txt")
+    @test response.status == 200
+    @test chomp(String(response.body)) == "User-agent: * Disallow: /"
+
     # Ensure that some random URL gets a 404
     @test_throws HTTP.ExceptionRequest.StatusError HTTP.get("$(server_url)/docs")
 
