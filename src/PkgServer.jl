@@ -114,6 +114,10 @@ function start(;kwargs...)
                 serve_parents(http)
                 return
             end
+            if resource == "/robots.txt"
+                serve_robots_txt(http)
+                return
+            end
 
             if resource  == "/registries"
                 open(joinpath(config.root, "static", "registries")) do io

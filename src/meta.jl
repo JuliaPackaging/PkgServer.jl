@@ -183,3 +183,7 @@ end
 function serve_parents(http::HTTP.Stream)
     return serve_json(http, config.storage_servers)
 end
+
+function serve_robots_txt(http::HTTP.Stream)
+    return write(http, "User-agent: * Disallow: /\n")
+end
