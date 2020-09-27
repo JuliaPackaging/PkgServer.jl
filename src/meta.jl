@@ -122,14 +122,17 @@ function get_num_artifacts_cached()
     num_artifacts_cached = get_num_hashnamed_files(joinpath(config.cache.root, "artifact"))
 end
 
-function serve_json(http::HTTP.Stream, data)
-    json = JSON3.write(data)
-    HTTP.setheader(http, "Content-Length" => string(length(json)))
-    HTTP.setheader(http, "Content-Type" => "application/json")
+function serve_data(http::HTTP.Stream, msg, content_type)
+    HTTP.setheader(http, "Content-Length" => string(length(msg)))
+    HTTP.setheader(http, "Content-Type" => content_type)
     if http.message.method == "GET"
         startwrite(http)
     end
-    return write(http, json)
+    return write(http, msg)
+end
+
+function serve_json(http::HTTP.Stream, data)
+    return serve_data(http, JSON3.write(data), "application/json")
 end
 
 function serve_meta(http::HTTP.Stream)
@@ -185,5 +188,5 @@ function serve_parents(http::HTTP.Stream)
 end
 
 function serve_robots_txt(http::HTTP.Stream)
-    return write(http, "User-agent: * Disallow: /\n")
+    return serve_data(http, "User-agent: * Disallow: /\n", "text/plain")
 end
