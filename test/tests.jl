@@ -1,18 +1,36 @@
 # Server may be sleepy and still waking up; wait until we can ask it for `/registries`
 t_start = time()
 @info("Waiting for PkgServer liveness")
+
+function handle_http_error(e)
+    if !isa(e, HTTP.IOExtras.IOError)
+        rethrow(e)
+    end
+
+    # Peel it to get the inner exception
+    e = e.e
+
+    # If it just can't connect, deal with it silently, otherwise rethrow
+    if isa(e, Base.IOError)
+        if e.code in (-Base.Libc.ECONNREFUSED, -Base.Libc.EPIPE, -Base.Libc.ECONNRESET)
+            return e.code
+        end
+    end
+    # I don't know how this occurs, but it does sometimes.  Probably an HTTP bug.
+    if isa(e, Base.EOFError)
+        return -Base.Libc.ECONNRESET
+    end
+
+    # If it's none of the "whitelisted" errors, rethrow it.
+    rethrow(e)
+end
+
 while true
     # Try to get an HTTP 200 OK on /registries
     response_code = try
         HTTP.get("$(server_url)/registries"; retry = false, readtimeout=1).status
     catch e
-        # If it just can't connect, deal with it silently, otherwise rethrow
-        if isa(e, HTTP.IOExtras.IOError) && e.e.code in (-Base.Libc.ECONNREFUSED, -Base.Libc.EPIPE, -Base.Libc.ECONNRESET)
-            # Return fake status code, this doesn't really matter, just so long as it's not 200
-            e.e.code
-        else
-            rethrow(e)
-        end
+        handle_http_error(e)
     end
 
     if response_code == 200
