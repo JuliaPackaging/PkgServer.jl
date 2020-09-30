@@ -11,6 +11,24 @@ if VERSION < v"1.4"
     error("These tests require a PkgServer-compatible Julia version!")
 end
 
+# "Backport" of JuliaLang/julia#37206
+function prepare_for_deletion(path::AbstractString)
+    # Nothing to do for non-directories
+    if !isdir(path)
+        return
+    end
+
+    try chmod(path, filemode(path) | 0o333)
+    catch; end
+    for (root, dirs, files) in walkdir(path)
+        for dir in dirs
+            dpath = joinpath(root, dir)
+            try chmod(dpath, filemode(dpath) | 0o333)
+            catch; end
+        end
+    end
+end
+
 # If these are not set, we will attempt to auto-initiate them.
 server_process = nothing
 if isempty(get(ENV, "JULIA_PKG_SERVER", "")) || isempty(get(ENV, "JULIA_PKG_SERVER_STORAGE_ROOT", ""))
@@ -42,5 +60,7 @@ finally
             println("$(f):")
             write(stdout, read(f))
         end
-    end    
+    end
 end
+
+(@isdefined temp_dir) && prepare_for_deletion(temp_dir)
