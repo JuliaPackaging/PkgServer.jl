@@ -14,16 +14,13 @@ jobs:
       - name: 'Pkg.update'
         run: |
           julia --project=. -e 'using Pkg; Pkg.update()'
-          PKG_DIFF="$(
-              julia --project=. -e 'using Pkg; Pkg.status(; mode=PKGMODE_PROJECT, diff=true)'
-              julia --project=. -e 'using Pkg; Pkg.status(; mode=PKGMODE_MANIFEST, diff=true)'
-              )"
-          # Escape newlines etc such that ::set-env works correctly with the multiline string,
-          # see https://github.community/t/set-output-truncates-multiline-strings/16852/3
-          PKG_DIFF="${PKG_DIFF//'%'/'%25'}"
-          PKG_DIFF="${PKG_DIFF//$'\n'/'%0A'}"
-          PKG_DIFF="${PKG_DIFF//$'\r'/'%0D'}"
-          echo "::set-env name=PKG_DIFF::$PKG_DIFF"
+          echo 'PKG_DIFF<<EOF' >> $GITHUB_ENV
+          echo 'pkg> status --project --diff' >> $GITHUB_ENV
+          julia --project=. -e 'using Pkg; Pkg.status(; mode=PKGMODE_PROJECT, diff=true)' >> $GITHUB_ENV
+          echo '' >> $GITHUB_ENV
+          echo 'pkg> status --manifest --diff' >> $GITHUB_ENV
+          julia --project=. -e 'using Pkg; Pkg.status(; mode=PKGMODE_MANIFEST, diff=true)' >> $GITHUB_ENV
+          echo 'EOF' >> $GITHUB_ENV
       - name: 'Create pull request'
         uses: peter-evans/create-pull-request@v3
         with:
@@ -32,11 +29,9 @@ jobs:
           body: |
             Automatic `Pkg.update()` with the following changes:
             ```
-            pkg> status --diff
             ${{ env.PKG_DIFF }}
             ```
           commit-message: |
             Automatic Pkg.update() with the following changes:
 
-            pkg> status --diff
             ${{ env.PKG_DIFF }}
