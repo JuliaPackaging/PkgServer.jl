@@ -52,6 +52,8 @@ function get_pkgserver_siblings()
         # North America
         "us-west",
         "us-east",
+        "us-east2",
+        "us-east-ci",
         # Europe
         "eu-central",
         # Asia
