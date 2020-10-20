@@ -22,7 +22,7 @@ ENV["PKGSERVER_GENERATING_PRECOMPILE"] = "true"
     end
 
     # Once we've got all these goodies, kill the server
-    close(PkgServer.config.listen_server)
+    close(PkgServer.config.listen_server[])
 end
 
 inf_timing = @snoopi tmin=0.001 begin
