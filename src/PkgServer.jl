@@ -31,6 +31,7 @@ end
 struct ServerConfig
     root::String
     listen_addr::InetAddr
+    listen_server::Sockets.TCPServer
     cache::SizeConstrainedFileCache
     registries::Dict{String,RegistryMeta}
     storage_servers::Vector{String}
@@ -53,16 +54,20 @@ struct ServerConfig
         mkpath(joinpath(storage_root, "temp"))
         # Files get stored into `cache`
         mkpath(joinpath(storage_root, "cache"))
+        # We create an explicit TCPServer so that we can manually control the server
+        listen_server = Sockets.listen(listen_addr)
         return new(
             storage_root,
             listen_addr,
+            listen_server,
             SizeConstrainedFileCache(
                 joinpath(storage_root, "cache"),
                 TargetSizeKeepFree(keep_free),
                 DiscardLRU()
             ),
             registries,
-            sort!(storage_servers))
+            sort!(storage_servers),
+        )
     end
 end
 
@@ -95,7 +100,7 @@ function start(;kwargs...)
             end
         end
         @info("server listening", config.listen_addr)
-        HTTP.listen(config.listen_addr.host, config.listen_addr.port) do http
+        HTTP.listen(config.listen_addr.host, config.listen_addr.port; server=config.listen_server) do http
             resource = http.message.target
             # If the user is asking for `/meta`, generate the requisite JSON object and send it back
             if resource == "/meta"
@@ -210,6 +215,12 @@ function start(;kwargs...)
             startwrite(http)
         end
     end
+end
+
+# precompilation                                                                                                                    
+include(joinpath(dirname(@__DIR__), "deps", "precompile.jl"))
+if get(ENV, "PKGSERVER_GENERATING_PRECOMPILE", nothing) === nothing
+    _precompile_()
 end
 
 end # module
