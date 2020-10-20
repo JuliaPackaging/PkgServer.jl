@@ -31,7 +31,7 @@ end
 struct ServerConfig
     root::String
     listen_addr::InetAddr
-    listen_server::Sockets.TCPServer
+    listen_server::Ref{Any}
     cache::SizeConstrainedFileCache
     registries::Dict{String,RegistryMeta}
     storage_servers::Vector{String}
@@ -54,12 +54,10 @@ struct ServerConfig
         mkpath(joinpath(storage_root, "temp"))
         # Files get stored into `cache`
         mkpath(joinpath(storage_root, "cache"))
-        # We create an explicit TCPServer so that we can manually control the server
-        listen_server = Sockets.listen(listen_addr)
         return new(
             storage_root,
             listen_addr,
-            listen_server,
+            Ref(nothing),
             SizeConstrainedFileCache(
                 joinpath(storage_root, "cache"),
                 TargetSizeKeepFree(keep_free),
@@ -99,8 +97,10 @@ function start(;kwargs...)
                 update_registries()
             end
         end
+        listen_server = Sockets.listen(config.listen_addr)
+        config.listen_server[] = listen_server
         @info("server listening", config.listen_addr)
-        HTTP.listen(config.listen_addr.host, config.listen_addr.port; server=config.listen_server) do http
+        HTTP.listen(config.listen_addr.host, config.listen_addr.port; server=listen_server) do http
             resource = http.message.target
             # If the user is asking for `/meta`, generate the requisite JSON object and send it back
             if resource == "/meta"
