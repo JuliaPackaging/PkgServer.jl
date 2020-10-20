@@ -26,3 +26,6 @@ CMD ["julia", "--project=/app", "/app/bin/run_server.jl"]
 
 # Next, copy in full `PkgServer.jl` directory (this is the step that will most often be invalidated)
 ADD . /app
+
+# Precompile PkgServer
+RUN julia --project=/app -e "using PkgServer"
