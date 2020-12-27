@@ -104,17 +104,12 @@ function start(;kwargs...)
         config.listen_server[] = listen_server
         @info("server listening", config.listen_addr)
         num_requests = 0
-        avg_t_meta = 0.0
         HTTP.listen(config.listen_addr.host, config.listen_addr.port; server=listen_server, max_connections=10) do http
             num_requests += 1
             resource = http.message.target
             # If the user is asking for `/meta`, generate the requisite JSON object and send it back
             if resource == "/meta"
-                t_meta = @elapsed serve_meta(http)
-                avg_t_meta = 0.95*avg_t_meta + 0.05*t_meta
-                if num_requests % 1000 == 0
-                    @info("Average t_meta time: $(avg_t_meta*1000) ms")
-                end
+                serve_meta(http)
                 return
             end
             if resource == "/meta/stats"
