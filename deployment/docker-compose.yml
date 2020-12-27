@@ -1,4 +1,5 @@
-version: '2'
+# This is the production docker-compose setup, complete with nginx TLS terminator
+version: '2.3'
 services:
     pkgserver:
         image: juliapackaging/pkgserver.jl
@@ -11,36 +12,46 @@ services:
             - ./logs/pkgserver:/app/logs
         environment:
             JULIA_PKG_SERVER: "0.0.0.0:8000"
-            JULIA_PKG_SERVER_FQDN: "$FQDN"
             JULIA_PKG_SERVER_STORAGE_SERVERS: "https://us-east.storage.juliahub.com,https://kr.storage.juliahub.com"
             JULIA_PKG_SERVER_STORAGE_ROOT: "/app/storage"
             JULIA_PKG_SERVER_LOGS_DIR: "/app/logs"
+            JULIA_PKG_SERVER_FQDN: "${PKG_SERVER_FQDN}"
+            JULIA_PKG_SERVER_STORAGE_SERVERS: "${STORAGE_SERVERS:-https://us-east.storage.juliahub.com,https://kr.storage.juliahub.com}"
+        # Limit the container to 1.5GB of RAM usage.
+        mem_limit: "1610612736"
         labels:
-            # Tell watchtower to auto-update this guy
-            com.centurylinklabs.watchtower.enable: true
+            com.centurylinklabs.watchtower.scope: "pkgserver.jl"
+        healthcheck:
+            test: curl -f http://localhost:8000/meta || exit 1
+            interval: 2m
+            timeout: 10s
+            retries: 3
+            start_period: 1m
     
     frontend:
         image: staticfloat/nginx-certbot
         restart: unless-stopped
         environment:
-            CERTBOT_EMAIL: $CERTBOT_EMAIL
-            # Allow us to template the $FQDN value within the nginx config
-            FQDN: $FQDN
-            ENVSUBST_VARS: FQDN
+            CERTBOT_EMAIL: "${CERTBOT_EMAIL:-info@foobar.com}"
         ports:
             - 80:80/tcp
             - 443:443/tcp
+            - 8000:8000/tcp
         depends_on:
             - pkgserver
         volumes:
-            # Mount in our nginx config
-            - ./nginx.conf:/etc/nginx/user.conf.d/${FQDN}.conf
+            # Mount in our nginx configs
+            - ./build/pkgserver.nginx.conf:/etc/nginx/user.conf.d/pkgserver-${PKG_SERVER_FQDN:-default}.conf
+            - ./build/s3mirror.nginx.conf:/etc/nginx/user.conf.d/s3mirror-${S3_MIRROR_FQDN:-default}.conf
+            - ./conf/optimized.nginx.conf:/etc/nginx/nginx.conf
             # Keep SSL certificates permanently
             - letsencrypt:/etc/letsencrypt
             # Store logs for us to peruse at our leisure
             - ./logs/nginx:/logs
+            # Allow nginx to look at the storage cache
+            - ./storage/cache:/cache
         labels:
-            com.centurylinklabs.watchtower.enable: true
+            com.centurylinklabs.watchtower.scope: "pkgserver.jl"
 
     # Auto-reload docker containers when their images are updated
     watchtower:
@@ -49,7 +60,7 @@ services:
         volumes:
             # Mount the docker socket
             - /var/run/docker.sock:/var/run/docker.sock
-        command: --cleanup --label-enable
+        command: --cleanup --scope pkgserver.jl
 
 volumes:
     letsencrypt:

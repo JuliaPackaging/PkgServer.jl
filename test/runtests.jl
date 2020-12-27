@@ -7,7 +7,7 @@ using PkgServer, Pkg, Pkg.TOML, HTTP, JSON3, Tar, Test
 # Or you can leave those blank, and we'll start up a PkgServer for you,
 # running on a background process.
 
-if VERSION < v"1.4"
+if VERSION < v"1.5"
     error("These tests require a PkgServer-compatible Julia version!")
 end
 

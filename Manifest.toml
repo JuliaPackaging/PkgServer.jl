@@ -37,7 +37,9 @@ version = "1.10.0+0"
 
 [[HTTP]]
 deps = ["Base64", "Dates", "IniFile", "MbedTLS", "Sockets", "URIs"]
-git-tree-sha1 = "504ca74f27377a25ebfd63b1f5e6ec3e9fb14690"
+git-tree-sha1 = "8f11211f02136ae416771849ee6791dd052e54b1"
+repo-rev = "sf/max_connections"
+repo-url = "https://github.com/staticfloat/HTTP.jl"
 uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 version = "0.9.1"
 
@@ -99,9 +101,9 @@ uuid = "a63ad114-7e13-5084-954f-fe012c677804"
 
 [[Parsers]]
 deps = ["Dates"]
-git-tree-sha1 = "b417be52e8be24e916e34b3d70ec2da7bdf56a68"
+git-tree-sha1 = "50c9a9ed8c714945e01cd53a21007ed3865ed714"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
-version = "1.0.12"
+version = "1.0.15"
 
 [[Pkg]]
 deps = ["Dates", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "UUIDs"]
@@ -135,15 +137,15 @@ uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
 
 [[StructTypes]]
 deps = ["Dates", "UUIDs"]
-git-tree-sha1 = "1ed04f622a39d2e5a6747c3a70be040c00333933"
+git-tree-sha1 = "d94235fcdc4a09649f263365c5f7e4ed4ba6ed34"
 uuid = "856f2bd8-1eba-4b0a-8007-ebc267875bd4"
-version = "1.1.0"
+version = "1.2.1"
 
 [[Tar]]
-deps = ["ArgTools", "Logging", "SHA"]
-git-tree-sha1 = "af3721253d44ec225e6bf33fe7d226238bdf84b4"
+deps = ["ArgTools", "SHA"]
+git-tree-sha1 = "c4b3a3a28f72ce90866d8a0fce2c61b201d1b693"
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
-version = "1.8.0"
+version = "1.9.0"
 
 [[Test]]
 deps = ["Distributed", "InteractiveUtils", "Logging", "Random"]

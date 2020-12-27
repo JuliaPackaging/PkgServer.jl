@@ -14,7 +14,7 @@ env:
 before_script:
     - cp deployment/.env.example deployment/.env
     - if [ ${USE_DOCKER} = 1 ]; then
-        docker build -t juliapackaging/pkgserver.jl .;
+        make -C deployment local_build;
         make -C deployment up;
         make -C deployment stop-watchtower;
         (make -C deployment logs &);

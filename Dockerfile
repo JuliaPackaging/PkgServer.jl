@@ -1,5 +1,6 @@
 # Keep in sync with .travis.yml and pkg-update.yml
 FROM julia:1.5
+#FROM julia:dev
 
 # This Dockerfile must be built with a context of the top-level PkgServer.jl directory
 WORKDIR /app
@@ -9,7 +10,7 @@ RUN mkdir /depot
 ENV JULIA_DEPOT_PATH="/depot"
 
 # While we're trying to debug issues, load in some helpful tools
-RUN apt update && apt install -y gdb procps
+#RUN apt update && apt install -y gdb procps
 
 # Copy in Project.toml/Manifest.toml, instantiate immediately, so that we don't have to do this
 # every time we rebuild, since those files should change relatively slowly.
