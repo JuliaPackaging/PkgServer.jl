@@ -48,8 +48,9 @@ services:
             - letsencrypt:/etc/letsencrypt
             # Store logs for us to peruse at our leisure
             - ./logs/nginx:/logs
-            # Allow nginx to look at the storage cache
-            - ./storage/cache:/cache
+            # Allow nginx to look at the storage cache and to keep an s3 cache of its own
+            - ./storage/cache:/caches/pkgserver
+            - ./storage/s3cache:/caches/s3
         labels:
             com.centurylinklabs.watchtower.scope: "pkgserver.jl"
 
@@ -61,6 +62,8 @@ services:
             # Mount the docker socket
             - /var/run/docker.sock:/var/run/docker.sock
         command: --cleanup --scope pkgserver.jl
+        labels:
+            com.centurylinklabs.watchtower.scope: "pkgserver.jl"
 
 volumes:
     letsencrypt:

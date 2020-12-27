@@ -13,24 +13,24 @@ S3_MIRROR_LISTEN_SRC  := $(if  $(S3_MIRROR_FQDN),conf/stanza_tls.conf,conf/stanz
 UID=$(shell id -u)
 export UID
 
-DIRS := storage/cache storage/static storage/temp
+DIRS := storage/cache storage/s3cache storage/static storage/temp
 DIRS += logs/nginx logs/pkgserver build
 $(DIRS):
 	mkdir -p $@
 
 # If our pkgserver is given a FQDN, then we splice in the TLS stanza, otherwise the HTTP stanza
 build/pkgserver.nginx.conf: conf/pkgserver.nginx.conf ${PKG_SERVER_LISTEN_SRC} | build
-	@FQDN=$(PKG_SERVER_FQDN) \
-	LISTEN_BLOCK_SRC=${PKG_SERVER_LISTEN_SRC} \
-	LISTEN_BLOCK="$$(envsubst '$${FQDN}' < "${PKG_SERVER_LISTEN_SRC}")" \
+	@export FQDN=$(PKG_SERVER_FQDN); \
+	export LISTEN_BLOCK_SRC=${PKG_SERVER_LISTEN_SRC}; \
+	export LISTEN_BLOCK="$$(envsubst '$${FQDN}' < "${PKG_SERVER_LISTEN_SRC}")"; \
 	envsubst '$${LISTEN_BLOCK_SRC} $${LISTEN_BLOCK} $${FQDN}' < $< > $@
 
 # Only build the s3mirror if S3_MIRROR_FQDN is given
 ifneq ($(S3_MIRROR_FQDN),)
 build/s3mirror.nginx.conf: conf/s3mirror.nginx.conf ${S3_MIRROR_LISTEN_SRC} | build
-	@FQDN=$(S3_MIRROR_FQDN) \
-	LISTEN_BLOCK_SRC=${S3_MIRROR_LISTEN_SRC} \
-	LISTEN_BLOCK="$$(envsubst '$${FQDN}' < "${S3_MIRROR_LISTEN_SRC}")" \
+	@export FQDN=$(S3_MIRROR_FQDN); \
+	export LISTEN_BLOCK_SRC=${S3_MIRROR_LISTEN_SRC}; \
+	export LISTEN_BLOCK="$$(envsubst '$${FQDN}' < "${S3_MIRROR_LISTEN_SRC}")"; \
 	envsubst '$${LISTEN_BLOCK_SRC} $${LISTEN_BLOCK} $${FQDN}' < $< > $@
 up: build/s3mirror.nginx.conf
 endif
