@@ -210,9 +210,9 @@ end
     @test response.status == 200
     stats = JSON3.read(String(response.body))
 
-    # Ensure that the counter went up, and that the timing has advanced:
-    @test stats["lru"][figlet_fonts_resource]["num_accessed"] >= figlet_fonts_entry["num_accessed"] + 5
-    @test stats["lru"][figlet_fonts_resource]["last_accessed"] > figlet_fonts_entry["last_accessed"]
+    # Ensure that the counter went up, and that the timing has advanced: (these are no longer true with nginx in the way)
+    #@test stats["lru"][figlet_fonts_resource]["num_accessed"] >= figlet_fonts_entry["num_accessed"] + 5
+    #@test stats["lru"][figlet_fonts_resource]["last_accessed"] > figlet_fonts_entry["last_accessed"]
 
     # Test that payload bytes received and transmitted are both nonzero,
     # and that (since we've served the same resources multiple times) the
@@ -221,8 +221,8 @@ end
     @test stats["payload_bytes_received"] > 0
     @test haskey(stats, "payload_bytes_transmitted")
     @test stats["payload_bytes_transmitted"] > 0
-    @test stats["payload_bytes_transmitted"] > stats["payload_bytes_received"]
-
+    # This is not necessarily true with nginx in the way
+    #@test stats["payload_bytes_transmitted"] > stats["payload_bytes_received"]
 end
 
 @testset "Skip-nonskip ambiguity testing" begin
@@ -266,12 +266,12 @@ end
     @test HTTP.header(partial_resp, "Content-Range") == "bytes 1024-$(full_length-1)/$(full_length)"
     @test HTTP.header(partial_resp, "Content-Length") == string(full_length - 1024)
     @test partial_resp.body == full_resp.body[1025:end]
-    # Specifying stopbyte only
+    # Specifying suffix length only
     partial_resp = HTTP.get(content_url, ["Range"=>"bytes=-2047"]);
     @test partial_resp.status == 206
-    @test HTTP.header(partial_resp, "Content-Range") == "bytes 0-2047/$(full_length)"
-    @test HTTP.header(partial_resp, "Content-Length") == "2048"
-    @test partial_resp.body == full_resp.body[1:2048]
+    @test HTTP.header(partial_resp, "Content-Range") == "bytes 638-2684/$(full_length)"
+    @test HTTP.header(partial_resp, "Content-Length") == "2047"
+    @test partial_resp.body == full_resp.body[end-2046:end]
     # Stopbyte larger than filesize
     partial_resp = HTTP.get(content_url, ["Range"=>"bytes=0-10000"]);
     @test partial_resp.status == 206
@@ -279,11 +279,8 @@ end
     @test HTTP.header(partial_resp, "Content-Length") == string(full_length)
     @test partial_resp.body == full_resp.body
     # Edgecase: startbyte larger than stopbyte
-    partial_resp = HTTP.get(content_url, ["Range"=>"bytes=2-1"]);
-    @test partial_resp.status == 200
-    @test HTTP.header(partial_resp, "Content-Range") == ""
-    @test HTTP.header(partial_resp, "Content-Length") == string(full_length)
-    @test partial_resp.body == full_resp.body
+    partial_resp = HTTP.get(content_url, ["Range"=>"bytes=2-1"]; status_exception = false);
+    @test partial_resp.status == 416
 
     # Specifying both startbyte and stopbyte but streaming rather than cached
     rm(cache_path; force=true)

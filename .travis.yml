@@ -12,9 +12,9 @@ env:
     - USE_DOCKER=1
 
 before_script:
-    - cp deployment/.env.example deployment/.env
     - if [ ${USE_DOCKER} = 1 ]; then
-        make -C deployment local_build;
+        echo "$DOCKER_PASSWORD" | docker login --username "$DOCKER_USERNAME" --password-stdin;
+        make -C deployment local-build;
         make -C deployment up;
         make -C deployment stop-watchtower;
         (make -C deployment logs &);

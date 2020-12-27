@@ -43,7 +43,12 @@ end
 const pkgserver_url = Ref{Union{Nothing,String}}(nothing)
 function get_pkgserver_url()
     if pkgserver_url[] === nothing
-        pkgserver_url[] = string("https://", get(ENV, "JULIA_PKG_SERVER_FQDN", "pkg.julialang.org"))
+        # Default to `https://pkg.julialang.org`
+        fqdn = get(ENV, "JULIA_PKG_SERVER_FQDN", "")
+        if isempty(fqdn)
+            fqdn = "pkg.julialang.org"
+        end
+        pkgserver_url[] = string("https://", fqdn)
     end
     return pkgserver_url[]
 end
