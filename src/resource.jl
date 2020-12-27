@@ -464,6 +464,7 @@ function download(server::AbstractString, resource::AbstractString, content_leng
             @warn "response status $(response.status)"
             return false
         end
+        global payload_bytes_received += filesize(temp_file)
         @info "download complete" server=server resource=resource elapsed=(time() - t_start)
 
         # Wait for the file read and tee tasks to finish
@@ -504,7 +505,8 @@ function serve_file(http::HTTP.Stream,
                     content_length = filesize(io),
                     dl_task::Task = @async(nothing))
     # Initialize range parameters
-    startbyte, stopbyte = 0, content_length-1
+    startbyte = 0
+    stopbyte = content_length - 1
 
     # Support single byte ranges
     range_string = HTTP.header(http, "Range")
@@ -515,14 +517,25 @@ function serve_file(http::HTTP.Stream,
         if m === nothing
             @error "unsupported HTTP Range request, ignoring" range_string
         else
-            requested_startbyte = max(something(tryparse(Int, m[1]), startbyte), startbyte)
-            requested_stopbyte = min(something(tryparse(Int, m[2]), stopbyte), stopbyte)
+            # Special-case an input like `-2047`, since we need to count from the back in that case
+            local requested_startbyte, requested_stopbyte
+            if isempty(m[1])
+                requested_startbyte = min(content_length - something(tryparse(Int, m[2]), 0), content_length - 1)
+                requested_stopbyte = content_length - 1
+            else
+                requested_startbyte = max(something(tryparse(Int, m[1]), startbyte), startbyte)
+                requested_stopbyte = min(something(tryparse(Int, m[2]), stopbyte), stopbyte)
+            end
             if requested_stopbyte - requested_startbyte >= 0
                 startbyte = requested_startbyte
                 stopbyte = requested_stopbyte
                 HTTP.setstatus(http, 206) # Partial Content
                 HTTP.setheader(http, "Content-Range" => "bytes $(startbyte)-$(stopbyte)/$(content_length)")
                 content_length = stopbyte - startbyte + 1
+            else
+                HTTP.setstatus(http, 416)
+                HTTP.write(http, "Invalid computed range $(requested_startbyte)-$(requested_stopbyte)")
+                return
             end
         end
     end
