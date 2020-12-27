@@ -1,3 +1,5 @@
+using Libdl
+
 ## Collected pieces of metadata that we will track over time
 # This value will be overridden in __init__()
 time_start = now()
@@ -137,6 +139,25 @@ function serve_json(http::HTTP.Stream, data)
     return serve_data(http, JSON3.write(data), "application/json")
 end
 
+libjulia_internal = C_NULL
+function get_num_live_tasks()
+    global libjulia_internal
+    if libjulia_internal == C_NULL
+        libjulia_internals = filter(f -> occursin("libjulia-internal", basename(f)), Libdl.dllist())
+        if isempty(libjulia_internals)
+            # e.g. we're running on Julia v1.5
+            return nothing
+        end
+        libjulia_internal = dlopen(first(libjulia_internals))
+    end
+    jl_live_tasks_addr = dlsym(libjulia_internal, "jl_live_tasks"; throw_error=false)
+    if jl_live_tasks_addr === nothing
+        return nothing
+    end
+    live_tasks = ccall(jl_live_tasks_addr, Vector, ())
+    return length(filter(t -> t.state == :runnable, live_tasks))
+end
+
 function serve_meta(http::HTTP.Stream)
     # We serve a JSON representation of some metadata about this PkgServer
     task_state = istaskfailed(registry_task) ? "failed" :
@@ -151,6 +172,10 @@ function serve_meta(http::HTTP.Stream)
         "registry_update_task" => task_state,
         "maxrss" => Int(Sys.maxrss()),
     )
+    live_tasks = get_num_live_tasks()
+    if live_tasks !== nothing
+        metadata["live_tasks"] = string(live_tasks)
+    end
     return serve_json(http, metadata)
 end
 

@@ -391,7 +391,15 @@ function stream_file(io_in::IO, start_byte::Int, length::Int, dl_task::Task, io_
                 break
             end
         else
-            transmitted += write(io_out, view(buffer, 1:min(n, length - transmitted)))
+            try
+                transmitted += write(io_out, view(buffer, 1:min(n, length - transmitted)))
+            catch e
+                # If the client disappears, just silently early-exit
+                if isa(e, Base.IOError) && e.code in (-Base.Libc.EPIPE, -Base.Libc.ECONNRESET)
+                    return transmitted
+                end
+                rethrow(e)
+            end
         end
     end
     return transmitted
@@ -399,6 +407,7 @@ end
 
 function download(server::AbstractString, resource::AbstractString, content_length::Int)
     @info "downloading resource" server=server resource=resource
+    t_start = time()
     hash = basename(resource)
 
     write_atomic_lru(resource) do temp_file, file_io
@@ -421,18 +430,18 @@ function download(server::AbstractString, resource::AbstractString, content_leng
         #     identified by the `skip_empty` version of the hash, store it under both.
 
         # Backing buffers for `tee` nodes
-        tar_skip_buffio = BufferStream(16*1024*1024)
-        tar_noskip_buffio = BufferStream(16*1024*1024)
+        #tar_skip_buffio = BufferStream(16*1024*1024)
+        #tar_noskip_buffio = BufferStream(16*1024*1024)
 
         # Create gzip process to decompress for us, using `gzip()` from `Gzip_jll`
-        gzip_proc = gzip(gz -> open(`$gz -d`, read=true, write=true))
+        #gzip_proc = gzip(gz -> open(`$gz -d`, read=true, write=true))
 
         # Create tee node splitting gzip -> (skip, noskip)
-        tar_tee_task = tee_task(gzip_proc.out, tar_skip_buffio, tar_noskip_buffio)
+        #tar_tee_task = tee_task(gzip_proc.out, tar_skip_buffio, tar_noskip_buffio)
 
         # Create two tasks to read in the gzip output and do in-tar tree hashing.
-        tar_skip_task = @async Tar.tree_hash(tar_skip_buffio; skip_empty=true)
-        tar_noskip_task = @async Tar.tree_hash(tar_noskip_buffio; skip_empty=false)
+        #tar_skip_task = @async Tar.tree_hash(tar_skip_buffio; skip_empty=true)
+        #tar_noskip_task = @async Tar.tree_hash(tar_noskip_buffio; skip_empty=false)
 
         # Initiate the HTTP request, and start the data flowing into the file
         http_task = @async HTTP.get(server * resource,
@@ -441,13 +450,13 @@ function download(server::AbstractString, resource::AbstractString, content_leng
         )
 
         # Read data back out from that file into the decompressor
-        file_read_task = @async begin
-            open(temp_file, read=true) do read_file_io
-                written = stream_file(read_file_io, 0, content_length, http_task, gzip_proc.in)
-                global payload_bytes_received += written
-            end
-            close(gzip_proc.in)
-        end
+        # file_read_task = @async begin
+        #     open(temp_file, read=true) do read_file_io
+        #         written = stream_file(read_file_io, 0, content_length, http_task, gzip_proc.in)
+        #         global payload_bytes_received += written
+        #     end
+        #     close(gzip_proc.in)
+        # end
 
         # Raise warnings about bad HTTP response codes
         response = fetch(http_task)
@@ -455,32 +464,33 @@ function download(server::AbstractString, resource::AbstractString, content_leng
             @warn "response status $(response.status)"
             return false
         end
+        @info "download complete" server=server resource=resource elapsed=(time() - t_start)
 
         # Wait for the file read and tee tasks to finish
-        wait(file_read_task)
-        wait(tar_tee_task)
+        #wait(file_read_task)
+        #wait(tar_tee_task)
 
         # Fetch the result of the tarball hash check
-        calc_skip_hash = fetch(tar_skip_task)
-        calc_noskip_hash = fetch(tar_noskip_task)
+        # calc_skip_hash = fetch(tar_skip_task)
+        # calc_noskip_hash = fetch(tar_noskip_task)
 
         # If nothing matches, freak out.
-        if hash != calc_skip_hash && hash != calc_noskip_hash
-            @warn "resource hash mismatch" server resource hash calc_skip_hash calc_noskip_hash
-            return false
-        end
+        # if hash != calc_skip_hash && hash != calc_noskip_hash
+        #     @warn "resource hash mismatch" server resource hash calc_skip_hash calc_noskip_hash
+        #     return false
+        # end
 
         # If calc_skip_hash matches, then store the file under the true hash as well.
-        if hash != calc_noskip_hash && hash == calc_skip_hash
-            @warn "archaic skip hash detected" resource hash calc_noskip_hash
+        # if hash != calc_noskip_hash && hash == calc_skip_hash
+        #     @warn "archaic skip hash detected" resource hash calc_noskip_hash
 
-            noskip_resource = joinpath(basename(resource), calc_noskip_hash)
-            write_atomic_lru(noskip_resource) do noskip_temp_file, noskip_file_io
-                close(noskip_file_io)
-                rm(noskip_temp_file)
-                cp(temp_file, noskip_temp_file)
-            end
-        end
+        #     noskip_resource = joinpath(basename(resource), calc_noskip_hash)
+        #     write_atomic_lru(noskip_resource) do noskip_temp_file, noskip_file_io
+        #         close(noskip_file_io)
+        #         rm(noskip_temp_file)
+        #         cp(temp_file, noskip_temp_file)
+        #     end
+        # end
 
         return true
     end
@@ -533,7 +543,7 @@ function serve_file(http::HTTP.Stream,
         transmitted = stream_file(io, startbyte, content_length, dl_task, http, buffer)
         global payload_bytes_transmitted += transmitted
         if transmitted != content_length
-            @error("file size mismatch", path, content_length, actual=transmitted)
+            @error("file size mismatch", content_length, actual=transmitted)
         end
     end
 end

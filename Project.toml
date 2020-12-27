@@ -1,7 +1,7 @@
 name = "PkgServer"
 uuid = "eac38ba3-4627-46d4-b1a1-bcb86ba22f8b"
-authors = ["Stefan Karpinski <stefan@karpinski.org>"]
-version = "0.1.0"
+authors = ["Stefan Karpinski <stefan@karpinski.org>", "Elliot Saba <staticfloat@gmail.com>"]
+version = "0.2.0"
 
 [deps]
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
@@ -10,6 +10,7 @@ Gzip_jll = "be1be57a-8558-53c3-a7e5-50095f79957e"
 HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
 LibGit2 = "76f85450-5226-5b5a-8eaa-529ad045b433"
+Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
 LoggingExtras = "e6f89c97-d47a-5376-807f-9c37f3926c36"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
@@ -21,9 +22,9 @@ StructTypes = "856f2bd8-1eba-4b0a-8007-ebc267875bd4"
 Tar = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
 
 [compat]
-HTTP = "0.8, 0.9"
+HTTP = "0.9"
 SimpleBufferStream = "1.1"
-julia = "1.4"
+julia = "1.5"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"

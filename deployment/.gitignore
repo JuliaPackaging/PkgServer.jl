@@ -4,3 +4,6 @@
 # Ignore locally-mounted `storage` and `logs` directories
 storage/
 logs/
+
+# Ignore our "build" directory
+build/
