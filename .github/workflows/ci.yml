@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: "master"
+    tags: ["*"]
+  pull_request:
+  release:
+
+jobs:
+  test:
+    name: Julia ${{ matrix.julia-version }} - ${{ matrix.os }} - use Docker ${{ matrix.docker }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        julia-version:
+          - "1.5"
+        os:
+          - ubuntu-latest
+        julia-arch:
+          - x64
+        docker:
+          - 'true'
+          - 'false'
+    steps:
+      - uses: actions/checkout@v2
+      - uses: julia-actions/setup-julia@v1
+        with:
+          version: ${{ matrix.julia-version }}
+          arch: ${{ matrix.julia-arch }}
+      - name: Cache artifacts
+        uses: actions/cache@v2
+        env:
+          cache-name: cache-artifacts
+        with:
+          path: ~/.julia/artifacts
+          key: ${{ runner.os }}-test-${{ env.cache-name }}-${{ hashFiles('**/Project.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-test-${{ env.cache-name }}-
+            ${{ runner.os }}-test-
+            ${{ runner.os }}-
+      - name: Setup Docker
+        if: ${{ matrix.docker == 'true' }}
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          echo "${DOCKER_PASSWORD}" | docker login --username "${DOCKER_USERNAME}" --password-stdin
+          make -C deployment local-build
+          make -C deployment up
+          make -C deployment stop-watchtower
+          (make -C deployment logs &)
+          echo "JULIA_PKG_SERVER=http://localhost:8000" >> ${GITHUB_ENV}
+          echo "JULIA_PKG_SERVER_STORAGE_ROOT=$(pwd)/deployment/storage" >> ${GITHUB_ENV}
+      - uses: julia-actions/julia-buildpkg@latest
+      - uses: julia-actions/julia-runtest@latest
+      - name: Destroy Docker
+        if: ${{ matrix.docker == 'true' }}
+        run: |
+          make -C deployment destroy
