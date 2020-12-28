@@ -367,7 +367,7 @@ number of bytes read from `io_in` and output into `io_out`.
 function stream_file(io_in::IO, start_byte::Int, length::Int, dl_task::Task, io_out::IO,
                      buffer::Vector{UInt8} = Vector{UInt8}(undef, 2*1024*1024))
     # Because this file may be an incomplete stream, we need to wait until our start byte
-    # is  ready, so we `sleep` in a loop while we attempt to `seek()`
+    # is ready, so we `sleep` in a loop while we attempt to `seek()`
     seek(io_in, start_byte)
     while position(io_in) != start_byte
         sleep(0.01)
@@ -384,7 +384,7 @@ function stream_file(io_in::IO, start_byte::Int, length::Int, dl_task::Task, io_
         # If we got nothing, either the file is prematurely truncated, or we're still downloading it somewhere.
         if n == 0
             # If we're still streaming, just sleep for a bit before trying again.
-            if dl_task.state != :done
+            if !istaskdone(dl_task)
                 sleep(0.001)
             else
                 # Otherwise, break out, something went wrong. :/
