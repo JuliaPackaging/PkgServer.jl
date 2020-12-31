@@ -11,7 +11,9 @@ S3_MIRROR_LISTEN_SRC  := $(if  $(S3_MIRROR_FQDN),conf/stanza_tls.conf,conf/stanz
 
 # We want to launch/build docker containers as our own UID, so we collect that from the environment
 UID=$(shell id -u)
-export UID
+USER=$(shell id -u -n)
+GROUP=$(shell id -g -n)
+export UID USER GROUP
 
 DIRS := storage/cache storage/s3cache storage/static storage/temp
 DIRS += logs/nginx logs/pkgserver build
@@ -44,7 +46,8 @@ down:
 # Rule to install logrotate configuration so that host-wide logrotate can
 # perform the logrotations, as well as run `make nginx-send-usr1`.
 /etc/logrotate.d/pkgserver: conf/logrotate.conf
-	LOGDIR=$(current_dir)logs SOURCEDIR=$(current_dir) envsubst < $< | sudo tee $@ >/dev/null
+	LOGDIR=$(shell pwd)/logs SOURCEDIR=$(shell pwd) envsubst < $< | sudo tee $@ >/dev/null
+up: /etc/logrotate.d/pkgserver
 
 # Rule to send nginx USR1 signal via docker-compose (used by `logrotate.conf`)
 nginx-send-usr1:
