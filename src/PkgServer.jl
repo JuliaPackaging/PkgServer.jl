@@ -131,7 +131,7 @@ function start(;kwargs...)
 
             if resource  == "/registries"
                 open(joinpath(config.root, "static", "registries")) do io
-                    serve_file(http, io, "text/plain", "identity")
+                    serve_file(http, io, "text/plain")
                 end
                 return
             end
@@ -143,7 +143,7 @@ function start(;kwargs...)
                 io = try_open(resource_path)
                 if io !== nothing
                     hit!(config.cache, resource[2:end])
-                    serve_file(http, io, "application/tar", "gzip")
+                    serve_file(http, io, "application/x-gzip")
                     close(io)
                     return
                 end
@@ -161,7 +161,7 @@ function start(;kwargs...)
                     # Try to serve `stream_path` file
                     stream_io = try_open(stream_path)
                     if stream_io !== nothing
-                        serve_file(http, stream_io, "application/tar", "gzip";
+                        serve_file(http, stream_io, "application/x-gzip";
                                    content_length=dl_state.content_length,
                                    dl_task=dl_state.dl_task)
                         close(stream_io)
@@ -172,7 +172,7 @@ function start(;kwargs...)
                     # downloading since we last checked 20 lines ago.  Check again.
                     io = try_open(resource_path)
                     if io !== nothing
-                        serve_file(http, io, "application/tar", "gzip")
+                        serve_file(http, io, "application/x-gzip")
                         close(io)
                         return
                     end
@@ -208,8 +208,7 @@ function start(;kwargs...)
                 path = joinpath(dirname(@__DIR__), "static", "index.html")
                 io = try_open(path)
                 if io !== nothing
-                    content = ("text/html", "identity")
-                    serve_file(http, io, content...)
+                    serve_file(http, io, "text/html")
                     close(io)
                     return
                 end
