@@ -5,22 +5,9 @@ import { Trend, Rate } from 'k6/metrics';
 
 export let options = {
     stages : [
-        // Over 10s, ramp up from 0 users to 10
-        { duration: '10s', target: 10},
+        { duration: '2s', target: 10},
         // Hold steady at 10 users for another 60s (enough time for us to get through initial compilation)
-        { duration: '60s', target: 10},
-
-        // Tap the accelerator, head up to 100 users and dawdle up there for a bit
-        { duration: '10s', target: 50},
-        { duration: '60s', target: 50},
-
-        // Pop the clutch, do a wheelie on this garbage truck and scream up to 1000 users
-        //{ duration: '30s', target: 1000},
-        //{ duration: '60s', target: 1000},
-
-        // // Clap your hands, place them firmly upon the disk, and open a portal to the underworld
-        // { duration: '30s', target: 10000},
-        // { duration: '60s', target: 10000},
+        { duration: '30m', target: 10},
     ],
 };
 
