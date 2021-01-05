@@ -500,7 +500,7 @@ end
 function serve_file(http::HTTP.Stream,
                     io::IO,
                     content_type::AbstractString,
-                    content_encoding::AbstractString;
+                    content_encoding::AbstractString = "identity",
                     buffer::Vector{UInt8} = Vector{UInt8}(undef, 2*1024*1024),
                     content_length = filesize(io),
                     dl_task::Task = @async(nothing))
