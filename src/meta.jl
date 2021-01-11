@@ -134,10 +134,11 @@ end
 function serve_data(http::HTTP.Stream, msg, content_type)
     HTTP.setheader(http, "Content-Length" => string(length(msg)))
     HTTP.setheader(http, "Content-Type" => content_type)
+    startwrite(http)
     if http.message.method == "GET"
-        startwrite(http)
+        write(http, msg)
     end
-    return write(http, msg)
+    return
 end
 
 function serve_json(http::HTTP.Stream, data)
