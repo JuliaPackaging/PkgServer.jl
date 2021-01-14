@@ -49,7 +49,8 @@ services:
             # Store logs for us to peruse at our leisure
             - ./logs/nginx:/logs
             # Allow nginx to look at the storage cache and to keep an s3 cache of its own
-            - ./storage/cache:/caches/pkgserver
+            - ./storage/cache:/caches/pkgserver/cache
+            - ./storage/static:/caches/pkgserver/static
             - ./storage/s3cache:/caches/s3
         labels:
             com.centurylinklabs.watchtower.scope: "pkgserver.jl"
