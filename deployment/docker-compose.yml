@@ -22,7 +22,7 @@ services:
         labels:
             com.centurylinklabs.watchtower.scope: "pkgserver.jl"
         healthcheck:
-            test: curl -f http://localhost:8000/meta || exit 1
+            test: curl -f --retry 5 --max-time 5 --retry-delay 10 --retry-max-time 60 "http://localhost:8000/meta" || bash -c 'kill -s 15 $$(pidof julia) && (sleep 10; kill -s 9 $$(pidof julia))'
             interval: 2m
             timeout: 10s
             retries: 3
