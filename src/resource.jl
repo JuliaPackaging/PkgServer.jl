@@ -81,14 +81,14 @@ function write_atomic_lru(f::Function, resource::AbstractString)
             # Calculate size of the file, notify the cache that we're adding
             # a file of that size, so it may need to shrink the cache:
             new_path = add!(config.cache, resource[2:end], filesize(temp_file))
-            @info("Moving $(temp_file) to $(new_path)")
+            @info("Moving", temp_file, new_path)
             mv(temp_file, new_path; force=true)
         end
         return retval
     catch e
         rethrow(e)
     finally
-        @info("Deleting $(temp_file) and pruning")
+        @info("Deleting and pruning", temp_file)
         rm(temp_file; force=true)
         prune_empty_parents(temp_file, joinpath(config.root, "temp"))
     end
@@ -390,6 +390,8 @@ function stream_file(io_in::IO, start_byte::Int, length::Int, dl_task::Task, io_
                 sleep(0.001)
             else
                 # Otherwise, break out, something went wrong. :/
+                @error("dl_task abnormal termination!")
+                fetch(dl_task)
                 break
             end
         else
