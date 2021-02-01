@@ -81,7 +81,7 @@ function write_atomic_lru(f::Function, resource::AbstractString)
             # Calculate size of the file, notify the cache that we're adding
             # a file of that size, so it may need to shrink the cache:
             new_path = add!(config.cache, resource[2:end], filesize(temp_file))
-            @info("Moving", temp_file, new_path)
+            @info("Moving", temp_file, new_path, filesize(temp_file))
             mv(temp_file, new_path; force=true)
         end
         return retval
@@ -89,8 +89,10 @@ function write_atomic_lru(f::Function, resource::AbstractString)
         rethrow(e)
     finally
         @info("Deleting and pruning", temp_file)
-        rm(temp_file; force=true)
-        prune_empty_parents(temp_file, joinpath(config.root, "temp"))
+        if isfile(temp_file)
+            rm(temp_file; force=true)
+        end
+        #prune_empty_parents(temp_file, joinpath(config.root, "temp"))
     end
 end
 
@@ -290,6 +292,13 @@ function content_length(resp::HTTP.Messages.Response)
     return nothing
 end
 
+function resource_is_downloading(resource::AbstractString)
+    with_fetch_state(resource) do state
+        if resource in keys(state.inprogress)
+            return state.inprogress[resource]
+        end
+    end
+end
 
 """
     fetch_resource(resource::AbstractString; servers=config.storage_servers)
