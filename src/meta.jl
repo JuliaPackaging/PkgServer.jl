@@ -166,16 +166,17 @@ end
 
 function serve_meta(http::HTTP.Stream)
     # We serve a JSON representation of some metadata about this PkgServer
-    task_state = istaskfailed(registry_task) ? "failed" :
-                 istaskdone(registry_task) ? "done" :
-                 istaskstarted(registry_task) ? "started" : "not-started"
+    task_state(t) = istaskfailed(t) ? "failed" :
+                    istaskdone(t) ? "done" :
+                    istaskstarted(t) ? "started" : "not-started"
     metadata = Dict(
         "pkgserver_version" => get_pkgserver_version(),
         "pkgserver_url" => get_pkgserver_url(),
         "julia_version" => string(VERSION),
         "start_time" => string(time_start),
         "last_registry_update" => string(last_registry_update),
-        "registry_update_task" => task_state,
+        "registry_update_task" => task_state(registry_update_task),
+        "registry_watchdog_task" => task_state(registry_watchdog_task),
         "maxrss" => Int(Sys.maxrss()),
     )
     live_tasks = get_num_live_tasks()

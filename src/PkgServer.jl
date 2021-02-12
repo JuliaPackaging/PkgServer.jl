@@ -90,13 +90,39 @@ function start(;kwargs...)
     update_registries()
 
     @sync begin
-        global last_registry_update
-        global registry_task = @spawn while true
-            last_registry_update = now()
-            sleep(1)
-            @try_printerror begin
-                forget_failures()
-                update_registries()
+        global last_registry_update = now()
+        global registry_update_task = @spawn begin
+            while true
+                last_registry_update = now()
+                sleep(1)
+                @try_printerror begin
+                    forget_failures()
+                    update_registries()
+                end
+            end
+        end
+
+        # Registry watchdog; if `last_registry_update` doesn't change
+        # for more than 20 minutes, we kill ourselves so that we can restart
+        global registry_watchdog_task = @spawn begin
+            while true
+                sleep(30)
+                # If the registry task has crashed, we bring the house down
+                if istaskfailed(registry_update_task)
+                    @error("registy_update_task died", exception=fetch(registry_update_task))
+                    exit(1)
+                end
+                # If the registry task comes to a graceful stop (e.g. we're debugging something)
+                # then we too shall gracefully quit
+                if istaskdone(registry_update_task)
+                    break
+                end
+
+                time_lag = now() - last_registry_update
+                if time_lag > 20*60
+                    @error("registry update watchdog timer tripped: $(time_lag) > $(20*60)")
+                    exit(1)
+                end
             end
         end
 
