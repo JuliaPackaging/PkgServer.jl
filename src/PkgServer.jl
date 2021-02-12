@@ -25,7 +25,19 @@ mutable struct RegistryMeta
     # The latest hash we know about for this registry
     latest_hash::Union{Nothing,String}
 
-    RegistryMeta(url::String) = new(url, nothing)
+    function RegistryMeta(url::String)
+        # Check to ensure this path actually exists
+        if !url_exists(url)
+            throw(ArgumentError("Invalid unreachable registry '$(url)'"))
+        end
+
+        # Auto-detect a repository that doesn't have `.git` at the end but could
+        git_url = string(url, ".git")
+        if !endswith(url, ".git") && url_exists(git_url)
+            url = git_url
+        end
+        return new(url, nothing)
+    end
 end
 
 struct ServerConfig
