@@ -88,41 +88,33 @@ function start(;kwargs...)
     # Update registries first thing
     @info("Performing initial registry update")
     update_registries()
+    global last_registry_update = now()
 
-    @sync begin
-        global last_registry_update = now()
+    # Experimental.@sync throws if _any_ of the tasks fail
+    Base.Experimental.@sync begin
         global registry_update_task = @spawn begin
             while true
-                last_registry_update = now()
                 sleep(1)
                 @try_printerror begin
                     forget_failures()
                     update_registries()
+                    last_registry_update = now()
                 end
             end
         end
 
         # Registry watchdog; if `last_registry_update` doesn't change
         # for more than 20 minutes, we kill ourselves so that we can restart
+        max_time_lag = Second(20 * 60)
         global registry_watchdog_task = @spawn begin
             while true
-                sleep(30)
-                # If the registry task has crashed, we bring the house down
-                if istaskfailed(registry_update_task)
-                    @error("registy_update_task died", exception=fetch(registry_update_task))
-                    exit(1)
-                end
-                # If the registry task comes to a graceful stop (e.g. we're debugging something)
-                # then we too shall gracefully quit
-                if istaskdone(registry_update_task)
-                    break
-                end
-
                 time_lag = now() - last_registry_update
-                if time_lag > 20*60
-                    @error("registry update watchdog timer tripped: $(time_lag) > $(20*60)")
+                if time_lag > max_time_lag
+                    task_result = try fetch(registry_update_task); catch err; err end
+                    @error "registry update watchdog timer tripped" time_lag max_time_lag task_result
                     exit(1)
                 end
+                sleep(max_time_lag.value)
             end
         end
 
