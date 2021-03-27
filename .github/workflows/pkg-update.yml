@@ -9,8 +9,8 @@ jobs:
       - uses: actions/checkout@v2
       - uses: julia-actions/setup-julia@v1
         with:
-          # Keep in sync with the .travis.yml and the Dockerfile
-          version: 1.5
+          # Keep in sync with the ci.yml and the Dockerfile
+          version: "1.6"
       - name: 'Pkg.update'
         run: |
           julia --project=. -e 'using Pkg; Pkg.update()'
