@@ -14,8 +14,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Keep in sync with the ci.yml and the Dockerfile
         julia-version:
-          - "1.5"
+          - "1.6"
         os:
           - ubuntu-latest
         julia-arch:
