@@ -1,1 +1,2 @@
 test/perf/* linguist-detectable=false
+test/perf/data/* linguist-detectable=false
