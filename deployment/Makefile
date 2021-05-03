@@ -45,13 +45,15 @@ down:
 
 # Rule to install logrotate configuration so that host-wide logrotate can
 # perform the logrotations, as well as run `make nginx-send-usr1`.
+PYTHON := "$(shell which python 2>/dev/null || which python3 2>/dev/null || which python2 2>/dev/null || echo "{python|python3|python2} not found")"
+PYTHONPATH := $(shell $(PYTHON) -c "import sys; print(':'.join(sys.path[1:]))")
 /etc/logrotate.d/pkgserver: conf/logrotate.conf
-	LOGDIR=$(shell pwd)/logs SOURCEDIR=$(shell pwd) envsubst < $< | sudo tee $@ >/dev/null
+	LOGDIR=$(shell pwd)/logs SOURCEDIR=$(shell pwd) PYTHONPATH=$(PYTHONPATH) envsubst < $< | sudo tee $@ >/dev/null
 up: /etc/logrotate.d/pkgserver
 
 # Rule to send nginx USR1 signal via docker-compose (used by `logrotate.conf`)
 nginx-send-usr1:
-	docker-compose exec frontend /bin/bash -c 'killall -USR1 nginx'
+	docker-compose exec frontend /bin/bash -c 'kill -USR1 `pgrep -f "nginx: [m]aster"`'
 
 # Do a manual build of the docker container
 local-build:
