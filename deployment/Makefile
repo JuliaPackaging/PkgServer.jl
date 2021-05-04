@@ -51,6 +51,13 @@ PYTHONPATH := $(shell $(PYTHON) -c "import sys; print(':'.join(sys.path[1:]))")
 	LOGDIR=$(shell pwd)/logs SOURCEDIR=$(shell pwd) PYTHONPATH=$(PYTHONPATH) envsubst < $< | sudo tee $@ >/dev/null
 up: /etc/logrotate.d/pkgserver
 
+
+# Rule to install cron.hourly configuration to tell nginx to reopen its logfiles
+/etc/cron.hourly/pkgserver: conf/cron.conf
+	SOURCEDIR=$(shell pwd) PYTHONPATH=$(PYTHONPATH) envsubst < $< | sudo tee $@ >/dev/null
+	sudo chmod +x $@
+up: /etc/cron.hourly/pkgserver
+
 # Rule to send nginx USR1 signal via docker-compose (used by `logrotate.conf`)
 nginx-send-usr1:
 	docker-compose exec frontend /bin/bash -c 'kill -USR1 `pgrep -f "nginx: [m]aster"`'
