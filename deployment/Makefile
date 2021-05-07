@@ -60,7 +60,7 @@ up: /etc/cron.hourly/pkgserver
 
 # Rule to send nginx USR1 signal via docker-compose (used by `logrotate.conf`)
 nginx-send-usr1:
-	docker-compose exec frontend /bin/bash -c 'kill -USR1 `pgrep -f "nginx: [m]aster"`'
+	docker-compose exec -T frontend /bin/bash -c 'kill -USR1 `pgrep -f "nginx: [m]aster"`'
 
 # Do a manual build of the docker container
 local-build:
