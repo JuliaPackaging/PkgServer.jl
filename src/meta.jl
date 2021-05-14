@@ -61,13 +61,19 @@ function get_pkgserver_siblings()
         "us-east",
         "us-east2",
         "us-east-ci",
+        # South America
+        "sa",
         # Europe
         "eu-central",
-        # Asia
+        # Asia/Oceania
         "in",
         "kr",
         "sg",
         # Special Chinese servers, serving from within-country
+        # Note that to connect directly, you should connect to
+        # `cn-X.pkg.juliacn.com`; `cn-X.pkg.julialang.org` will
+        # redirect you.  You can always discover the canonical
+        # address of a server through the `/meta` endpoint.
         "cn-southeast",
         "cn-east",
         "cn-northeast",
