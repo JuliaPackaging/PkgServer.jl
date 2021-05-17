@@ -58,7 +58,9 @@ function get_pkgserver_siblings()
     regions = [
         # North America
         "us-west",
-        "us-east",
+        # This one is a load balancer, we don't report it
+        #"us-east",
+        "us-east1",
         "us-east2",
         "us-east-ci",
         # South America
