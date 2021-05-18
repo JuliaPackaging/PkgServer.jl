@@ -3,14 +3,14 @@ using PkgServer, Sockets, Logging, LoggingExtras, Dates
 
 # Accept optional environment-based arguments
 # Eventually, do this via Pkg preferences
-pkgserver = get(ENV, "JULIA_PKG_SERVER", "http://0.0.0.0:8000")
+pkgserver = get(ENV, "JULIA_PKG_SERVER", "http://[::]:8000")
 try
-    m = match(r"(https?://)?(.+):(\d+)", pkgserver)
+    m = match(r"(https?://)?\[?([^\[\]]+)\]?:(\d+)", pkgserver)
     global host = m.captures[2]
     global port = parse(Int, m.captures[3])
-catch
-    @warn("Invalid JULIA_PKG_SERVER setting, ignoring and using default of 0.0.0.0:8000!")
-    global host = "0.0.0.0"
+catch ex
+    @warn("Invalid JULIA_PKG_SERVER setting, ignoring and using default of [::]:8000!", pkgserver, ex)
+    global host = "::"
     global port = 8000
 end
 

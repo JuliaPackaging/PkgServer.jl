@@ -49,7 +49,7 @@ struct ServerConfig
     storage_servers::Vector{String}
 
     # Default server config constructor
-    function ServerConfig(; listen_addr = InetAddr(ip"127.0.0.1", 8000),
+    function ServerConfig(; listen_addr = InetAddr(ip"::", 8000),
                             storage_root = "/tmp/pkgserver",
                             registries = Dict(
                                 "23338594-aafe-5451-b93e-139f81909106" =>
