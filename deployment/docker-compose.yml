@@ -5,8 +5,9 @@ services:
         image: juliapackaging/pkgserver.jl
         #user: $UID
         restart: unless-stopped
-        ports:
-            - 8000:8000/tcp
+        #ports:
+        #    - 8000:8000/tcp
+        network_mode: host
         volumes:
             - ./storage:/app/storage
             - ./logs/pkgserver:/app/logs
@@ -33,9 +34,10 @@ services:
         restart: unless-stopped
         environment:
             CERTBOT_EMAIL: "${CERTBOT_EMAIL:-info@foobar.com}"
-        ports:
-            - 80:80/tcp
-            - 443:443/tcp
+        #ports:
+        #    - 80:80/tcp
+        #    - 443:443/tcp
+        network_mode: host
         depends_on:
             - pkgserver
         volumes:
