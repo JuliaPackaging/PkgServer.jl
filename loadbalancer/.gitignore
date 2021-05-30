@@ -1,0 +1,8 @@
+# Ignore local configuration setup
+.env
+
+# Ignore locally-mounted `storage` and `logs` directories
+logs/
+
+# Ignore our "build" directory
+build/
