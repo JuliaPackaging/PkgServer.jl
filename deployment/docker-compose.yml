@@ -3,7 +3,7 @@ version: '2.3'
 services:
     pkgserver:
         image: juliapackaging/pkgserver.jl
-        user: $UID
+        user: $UID:$GID
         restart: unless-stopped
         expose:
             - 8000

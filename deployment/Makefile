@@ -11,9 +11,10 @@ S3_MIRROR_LISTEN_SRC  := $(if  $(S3_MIRROR_FQDN),conf/stanza_tls.conf,conf/stanz
 
 # We want to launch/build docker containers as our own UID, so we collect that from the environment
 UID=$(shell id -u)
+GID=$(shell id -g)
 USER=$(shell id -u -n)
 GROUP=$(shell id -g -n)
-export UID USER GROUP
+export UID GID USER GROUP
 
 DIRS := storage/cache storage/s3cache storage/static storage/temp
 DIRS += logs/nginx logs/pkgserver build
