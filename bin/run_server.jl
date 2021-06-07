@@ -1,5 +1,5 @@
 #!/usr/bin/env julia
-using PkgServer, Sockets, Logging, LoggingExtras, Dates
+using PkgServer, Sockets, Logging, LoggingExtras, Dates, FilesystemDatastructures, Gzip_jll
 
 # Accept optional environment-based arguments
 # Eventually, do this via Pkg preferences
@@ -22,9 +22,20 @@ mkpath(storage_root)
 mkpath(log_dir)
 
 # Set up logging
-const date_format = "yyyy-mm-dd HH:MM:SS"
+const date_format = dateformat"yyyy-mm-dd HH:MM:SS"
 timestamp_logger(logger) = TransformerLogger(logger) do log
     merge(log, (; message = "[$(Dates.format(now(), date_format))] $(log.message)"))
+end
+
+# Keep 30 days of logs
+let fc = NFileCache(log_dir, 30, DiscardLRU(); predicate = x -> endswith(x, r"pkgserver\.log(\.gz)?"))
+    global function postrotate(file)
+        # Compress logfile and add to filecache
+        gzip() do gz
+            run(`$(gz) $(file)`)
+        end
+        add!(fc, file * ".gz")
+    end
 end
 
 global_logger(TeeLogger(
@@ -32,7 +43,8 @@ global_logger(TeeLogger(
         MinLevelLogger(
             DatetimeRotatingFileLogger(
                 log_dir,
-                string(raw"yyyy-mm-dd-\p\k\g\s\e\r\v\e\r.\l\o\g"),
+                string(raw"yyyy-mm-dd-\p\k\g\s\e\r\v\e\r.\l\o\g");
+                rotation_callback = postrotate,
             ),
             Logging.Info,
         ),
