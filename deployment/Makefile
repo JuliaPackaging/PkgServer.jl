@@ -56,10 +56,10 @@ up: /etc/logrotate.d/pkgserver
 ifneq ($(wildcard /etc/cron.daily/logrotate),)
 /etc/cron.hourly/logrotate: /etc/cron.daily/logrotate
 # Use `dpkg-divert`, if possible
-ifneq ($(shell which dpkg-divert),)
+ifneq ($(shell which dpkg-divert 2>/dev/null),)
 	sudo dpkg-divert --add --rename --divert /etc/cron.hourly/logrotate /etc/cron.daily/logrotate
 else
-	sudo mv $@ $<
+	sudo mv $< $@
 endif
 up: /etc/cron.hourly/logrotate
 endif
