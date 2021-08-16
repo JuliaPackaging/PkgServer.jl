@@ -8,9 +8,6 @@ services:
             CERTBOT_EMAIL: "${CERTBOT_EMAIL:-info@foobar.com}"
         # Use `host` network mode so that we get proper ipv6 IP addresses
         network_mode: host
-        #ports:
-        #    - 80:80/tcp
-        #    - 443:443/tcp
         volumes:
             # Mount in our nginx configs
             - ./build/loadbalancer.nginx.conf:/etc/nginx/user_conf.d/loadbalancer-${SERVER_FQDN:-default}.conf

@@ -2,12 +2,22 @@
 all: up
 
 # Extract configuration from `.env` file
+PKG_SERVER_REGION := $(shell bash -c "source .env 2>/dev/null && echo \$$PKG_SERVER_REGION")
+ifeq ($(PKG_SERVER_REGION),)
+$(error "Must specify PKG_SERVER_REGION in .env!")
+endif
+
 PKG_SERVER_FQDN := $(shell bash -c "source .env 2>/dev/null && echo \$$PKG_SERVER_FQDN")
-S3_MIRROR_FQDN  := $(shell bash -c "source .env 2>/dev/null && echo \$$S3_MIRROR_FQDN")
+ifeq ($(PKG_SERVER_FQDN),)
+# Default the FQDN to `region.pkg.julialang.org`
+PKG_SERVER_FQDN := $(PKG_SERVER_REGION).pkg.julialang.org
+endif
+export PKG_SERVER_FQDN
+S3_MIRROR_BUCKET_LIST := $(shell bash -c "source .env 2>/dev/null && echo \$$S3_MIRROR_BUCKET_LIST")
 
 # If a FQDN is not given, we use the plain HTTP stanza for the pkg server/s3 mirror
-PKG_SERVER_LISTEN_SRC := $(if $(PKG_SERVER_FQDN),conf/stanza_tls.conf,conf/stanza_http.conf)
-S3_MIRROR_LISTEN_SRC  := $(if  $(S3_MIRROR_FQDN),conf/stanza_tls.conf,conf/stanza_http.conf)
+LISTEN_SRC := $(if $(PKG_SERVER_FQDN),conf/stanza_tls.conf,conf/stanza_http.conf)
+MIRROR_SRC := conf/s3mirror.nginx.conf
 
 # We want to launch/build docker containers as our own UID, so we collect that from the environment
 UID=$(shell id -u)
@@ -22,21 +32,19 @@ $(DIRS):
 	mkdir -p $@
 
 # If our pkgserver is given a FQDN, then we splice in the TLS stanza, otherwise the HTTP stanza
-build/pkgserver.nginx.conf: conf/pkgserver.nginx.conf ${PKG_SERVER_LISTEN_SRC} | build
+build/pkgserver.nginx.conf: conf/pkgserver.nginx.conf ${LISTEN_SRC} | build
 	@export FQDN=$(PKG_SERVER_FQDN); \
-	export LISTEN_BLOCK_SRC=${PKG_SERVER_LISTEN_SRC}; \
-	export LISTEN_BLOCK="$$(envsubst '$${FQDN}' < "${PKG_SERVER_LISTEN_SRC}")"; \
-	envsubst '$${LISTEN_BLOCK_SRC} $${LISTEN_BLOCK} $${FQDN}' < $< > $@
-
-# Only build the s3mirror if S3_MIRROR_FQDN is given
-ifneq ($(S3_MIRROR_FQDN),)
-build/s3mirror.nginx.conf: conf/s3mirror.nginx.conf ${S3_MIRROR_LISTEN_SRC} | build
-	@export FQDN=$(S3_MIRROR_FQDN); \
-	export LISTEN_BLOCK_SRC=${S3_MIRROR_LISTEN_SRC}; \
-	export LISTEN_BLOCK="$$(envsubst '$${FQDN}' < "${S3_MIRROR_LISTEN_SRC}")"; \
-	envsubst '$${LISTEN_BLOCK_SRC} $${LISTEN_BLOCK} $${FQDN}' < $< > $@
-up: build/s3mirror.nginx.conf
-endif
+	export REGION=$(PKG_SERVER_REGION); \
+	export LISTEN_BLOCK_SRC=${LISTEN_SRC}; \
+	export LISTEN_BLOCK="$$(envsubst '$${FQDN} $${REGION}' < "${LISTEN_SRC}")"; \
+	MIRROR_BLOCK=""; \
+	if [ -n "$(S3_MIRROR_BUCKET_LIST)" ]; then \
+		for S3_BUCKET in $(S3_MIRROR_BUCKET_LIST); do \
+			export S3_BUCKET; \
+			export MIRROR_BLOCK="$${MIRROR_BLOCK} $$(envsubst '$${S3_BUCKET}' < "${MIRROR_SRC}")"; \
+		done; \
+	fi; \
+	envsubst '$${LISTEN_BLOCK_SRC} $${LISTEN_BLOCK} $${MIRROR_BLOCK} $${FQDN} $${REGION}' < $< > $@
 
 up: $(DIRS) build/pkgserver.nginx.conf
 	docker-compose up --build --remove-orphans -d

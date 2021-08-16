@@ -17,7 +17,7 @@ $(DIRS):
 
 build/loadbalancer.nginx.conf: conf/loadbalancer.nginx.conf .env | build
 	@export FQDN=$(SERVER_FQDN); \
-	export PKGSERVERS_SERVER_BLOCK="$$(printf "    server %s:8000;\n" $(PKGSERVERS))"; \
+	export PKGSERVERS_SERVER_BLOCK="$$(printf "    server pkgserver-%s.ipv6.cflo.at:443;\n" $(PKGSERVERS))"; \
 	envsubst '$${FQDN} $${PKGSERVERS_SERVER_BLOCK}' < $< > $@
 
 up: $(DIRS) build/loadbalancer.nginx.conf
