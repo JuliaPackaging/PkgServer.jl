@@ -35,9 +35,20 @@ PYTHONPATH := $(shell $(PYTHON) -c "import sys; print(':'.join(sys.path[1:]))")
 	LOGDIR=$(shell pwd)/logs SOURCEDIR=$(shell pwd) PYTHONPATH=$(PYTHONPATH) envsubst < $< | sudo tee $@ >/dev/null
 up: /etc/logrotate.d/loadbalancer
 
+# If `cron.daily/logrotate` exists, we better move it over to `cron.hourly`, so that we can do hourly log rotations
+ifneq ($(wildcard /etc/cron.daily/logrotate),)
+/etc/cron.hourly/logrotate: /etc/cron.daily/logrotate
+# Use `dpkg-divert`, if possible
+ifneq ($(shell which dpkg-divert 2>/dev/null),)
+	sudo dpkg-divert --add --rename --divert /etc/cron.hourly/logrotate /etc/cron.daily/logrotate
+else
+	sudo mv $< $@
+endif
+up: /etc/cron.hourly/logrotate
+endif
 
 # Rule to install cron.hourly configuration to tell nginx to reopen its logfiles
-/etc/cron.hourly/loadbalancer: ../deployment/conf/cron.conf
+/etc/cron.hourly/loadbalancer: ../deployment/conf/cron.logrotate.conf
 	SOURCEDIR=$(shell pwd) PYTHONPATH=$(PYTHONPATH) envsubst < $< | sudo tee $@ >/dev/null
 	sudo chmod +x $@
 up: /etc/cron.hourly/loadbalancer
