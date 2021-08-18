@@ -3,6 +3,11 @@ t_start = time()
 @info("Waiting for PkgServer liveness")
 
 function handle_http_error(e)
+    # New HTTP error code in 0.9.13+
+    if isa(e, HTTP.TimeoutRequest.ReadTimeoutError)
+        return -Base.Libc.ECONNRESET
+    end
+
     if !isa(e, HTTP.IOExtras.IOError)
         rethrow(e)
     end
