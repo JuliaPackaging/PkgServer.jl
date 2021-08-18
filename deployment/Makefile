@@ -14,9 +14,10 @@ PKG_SERVER_FQDN := $(PKG_SERVER_REGION).pkg.julialang.org
 endif
 export PKG_SERVER_FQDN
 S3_MIRROR_BUCKET_LIST := $(shell bash -c "source .env 2>/dev/null && echo \$$S3_MIRROR_BUCKET_LIST")
+DISABLE_TLS := $(shell bash -c "source .env 2>/dev/null && echo \$$DISABLE_TLS")
 
-# If a FQDN is not given, we use the plain HTTP stanza for the pkg server/s3 mirror
-LISTEN_SRC := $(if $(PKG_SERVER_FQDN),conf/stanza_tls.conf,conf/stanza_http.conf)
+# If `DISABLE_TLS` is defined, use the `http` stanza instead of the `tls` one.
+LISTEN_SRC := $(if $(DISABLE_TLS),conf/stanza_http.conf,conf/stanza_tls.conf)
 MIRROR_SRC := conf/s3mirror.nginx.conf
 
 # We want to launch/build docker containers as our own UID, so we collect that from the environment
