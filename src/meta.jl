@@ -55,14 +55,15 @@ end
 
 # Return all officially-run PkgServer instances we know about
 function get_pkgserver_siblings()
+    # Note that some of these (`us-east`, `us-west` and `eu-central` at the
+    # time of this writing) are loadbalancers with multiple PkgServer instances
+    # behind the LB, called things like `us-west1` and `us-east3`, etc...
+    # We surface the loadbalancer URL as that is the primary endpoint that
+    # users should hit when making requests.
     regions = [
         # North America
         "us-west",
-        # This one is a load balancer, we don't report it
-        #"us-east",
-        "us-east1",
-        "us-east2",
-        "us-east-ci",
+        "us-east",
         # South America
         "sa",
         # Europe
