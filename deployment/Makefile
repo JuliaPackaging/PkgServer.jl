@@ -74,7 +74,7 @@ endif
 
 
 # Rule to install cron.hourly configuration to tell nginx to reopen its logfiles
-/etc/cron.hourly/pkgserver: conf/cron.conf
+/etc/cron.hourly/pkgserver: conf/cron.logrotate.conf
 	SOURCEDIR=$(shell pwd) PYTHONPATH=$(PYTHONPATH) envsubst < $< | sudo tee $@ >/dev/null
 	sudo chmod +x $@
 up: /etc/cron.hourly/pkgserver
@@ -82,6 +82,11 @@ up: /etc/cron.hourly/pkgserver
 # Rule to send nginx USR1 signal via docker-compose (used by `logrotate.conf`)
 nginx-send-usr1:
 	docker-compose exec -T frontend /bin/bash -c 'kill -USR1 `pgrep -f "nginx: [m]aster"`'
+
+/etc/cron.daily/pkgserver: conf/cron.restart.conf
+	SOURCEDIR=$(shell pwd) PYTHONPATH=$(PYTHONPATH) envsubst < $< | sudo tee $@ >/dev/null
+	sudo chmod +x $@
+up: /etc/cron.daily/pkgserver
 
 # Do a manual build of the docker container
 local-build:
