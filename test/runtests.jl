@@ -37,6 +37,7 @@ if isempty(get(ENV, "JULIA_PKG_SERVER", "")) || isempty(get(ENV, "JULIA_PKG_SERV
     temp_dir = mktempdir()
     ENV["JULIA_PKG_SERVER"] = "http://127.0.0.1:8000"
     ENV["JULIA_PKG_SERVER_STORAGE_ROOT"] = temp_dir
+    ENV["JULIA_PKG_SERVER_FQDN"] = "starfleet-central.pkg.julialang.org"
 
     @info("Automatically starting local PkgServer for testing at $(ENV["JULIA_PKG_SERVER"])")
     global server_process = run(`$(Base.julia_cmd()) --project=$(code_dir) $(code_dir)/bin/run_server.jl`; wait=false)
