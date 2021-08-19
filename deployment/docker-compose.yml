@@ -42,7 +42,6 @@ services:
         volumes:
             # Mount in our nginx configs
             - ./build/pkgserver.nginx.conf:/etc/nginx/user_conf.d/pkgserver-${PKG_SERVER_FQDN:-default}.conf
-            - ./build/s3mirror.nginx.conf:/etc/nginx/user_conf.d/s3mirror-${S3_MIRROR_FQDN:-default}.conf
             - ./conf/optimized.nginx.conf:/etc/nginx/nginx.conf
             # Keep SSL certificates permanently
             - letsencrypt:/etc/letsencrypt

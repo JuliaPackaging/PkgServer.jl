@@ -15,10 +15,14 @@ endif
 export PKG_SERVER_FQDN
 S3_MIRROR_BUCKET_LIST := $(shell bash -c "source .env 2>/dev/null && echo \$$S3_MIRROR_BUCKET_LIST")
 DISABLE_TLS := $(shell bash -c "source .env 2>/dev/null && echo \$$DISABLE_TLS")
+DISABLE_IPV6 := $(shell bash -c "source .env 2>/dev/null && echo \$$DISABLE_IPV6")
 
 # If `DISABLE_TLS` is defined, use the `http` stanza instead of the `tls` one.
 LISTEN_SRC := $(if $(DISABLE_TLS),conf/stanza_http.conf,conf/stanza_tls.conf)
 MIRROR_SRC := conf/s3mirror.nginx.conf
+
+# If `DISABLE_IPV6` is defined, don't add the `ipv6` servername
+SERVERNAMES := $(PKG_SERVER_FQDN) pkgserver-$(PKG_SERVER_REGION).ip.cflo.at pkgserver-$(PKG_SERVER_REGION).ipv4.cflo.at $(if $(DISABLE_IPV6),,pkgserver-$(PKG_SERVER_REGION).ipv6.cflo.at)
 
 # We want to launch/build docker containers as our own UID, so we collect that from the environment
 UID=$(shell id -u)
@@ -34,18 +38,18 @@ $(DIRS):
 
 # If our pkgserver is given a FQDN, then we splice in the TLS stanza, otherwise the HTTP stanza
 build/pkgserver.nginx.conf: conf/pkgserver.nginx.conf ${LISTEN_SRC} | build
-	@export FQDN=$(PKG_SERVER_FQDN); \
-	export REGION=$(PKG_SERVER_REGION); \
-	export LISTEN_BLOCK_SRC=${LISTEN_SRC}; \
-	export LISTEN_BLOCK="$$(envsubst '$${FQDN} $${REGION}' < "${LISTEN_SRC}")"; \
+	@export FQDN="$(PKG_SERVER_FQDN)"; \
+	export SERVERNAMES="$(SERVERNAMES)"; \
+	export LISTEN_BLOCK_SRC=$(LISTEN_SRC); \
+	export LISTEN_BLOCK="$$(envsubst '$${SERVERNAMES} $${FQDN}' < "$(LISTEN_SRC)")"; \
 	MIRROR_BLOCK=""; \
 	if [ -n "$(S3_MIRROR_BUCKET_LIST)" ]; then \
 		for S3_BUCKET in $(S3_MIRROR_BUCKET_LIST); do \
 			export S3_BUCKET; \
-			export MIRROR_BLOCK="$${MIRROR_BLOCK} $$(envsubst '$${S3_BUCKET}' < "${MIRROR_SRC}")"; \
+			export MIRROR_BLOCK="$${MIRROR_BLOCK} $$(envsubst '$${S3_BUCKET}' < "$(MIRROR_SRC)")"; \
 		done; \
 	fi; \
-	envsubst '$${LISTEN_BLOCK_SRC} $${LISTEN_BLOCK} $${MIRROR_BLOCK} $${FQDN} $${REGION}' < $< > $@
+	envsubst '$${LISTEN_BLOCK_SRC} $${LISTEN_BLOCK} $${MIRROR_BLOCK} $${REGION} $${FQDN}' < $< > $@
 
 up: $(DIRS) build/pkgserver.nginx.conf
 	docker-compose up --build --remove-orphans -d
