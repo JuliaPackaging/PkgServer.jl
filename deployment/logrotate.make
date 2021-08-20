@@ -16,7 +16,7 @@ ifneq ($(wildcard /lib/systemd/system/logrotate.timer),)
 	sudo cp $< $@
 	sed -e 's/^OnCalendar=.*/OnCalendar=hourly/' -e 's/^AccuracySec=.*/AccuracySec=30m/' <$@ | sudo tee $< >/dev/null
 	sudo touch $@
-    sudo systemctl daemon-reload
+	sudo systemctl daemon-reload
 up: /lib/systemd/system/logrotate.timer.old
 endif
 
