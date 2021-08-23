@@ -100,6 +100,9 @@ dev-up:
 stop-watchtower:
 	docker-compose stop watchtower
 
+trigger-watchtower:
+	docker-compose run --rm watchtower --cleanup --scope pkgserver.jl --run-once
+
 logs:
 	docker-compose logs -f --tail=100
 .PHONY: logs
