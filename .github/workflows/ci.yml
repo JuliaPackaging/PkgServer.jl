@@ -1,13 +1,19 @@
 name: CI
-
 on:
-  push:
-    branches: "master"
-    tags: ["*"]
   pull_request:
-  release:
-
+    branches:
+      - master
+  push:
+    branches:
+      - master
+    tags: '*'
 jobs:
+  all:
+    name: all
+    needs: [test, docker-build]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "All CI jobs have completed."
   test:
     name: Julia ${{ matrix.julia-version }} - ${{ matrix.os }} - use Docker ${{ matrix.docker }}
     runs-on: ${{ matrix.os }}
@@ -61,3 +67,19 @@ jobs:
         if: ${{ matrix.docker == 'true' }}
         run: |
           make -C deployment destroy
+  docker-build:
+    name: docker-build
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: docker login
+        run: echo "${DOCKER_PASSWORD}" | docker login --username "${DOCKER_USERNAME}" --password-stdin
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      - name: docker build
+        run: docker build -t juliapackaging/pkgserver.jl .
+      - name: docker push
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        run: docker push juliapackaging/pkgserver.jl
