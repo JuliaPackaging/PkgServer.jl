@@ -61,7 +61,7 @@ services:
         volumes:
             # Mount the docker socket
             - /var/run/docker.sock:/var/run/docker.sock
-        command: --cleanup --scope pkgserver.jl
+        command: --cleanup --scope pkgserver.jl --interval 28800
         labels:
             com.centurylinklabs.watchtower.scope: "pkgserver.jl"
 
