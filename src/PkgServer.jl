@@ -137,6 +137,7 @@ function start(;kwargs...)
         HTTP.listen(config.listen_addr.host, config.listen_addr.port; server=listen_server, max_connections=10) do http
             num_requests += 1
             resource = http.message.target
+            request_id = HTTP.header(http, "X-Request-ID", "")
             # If the user is asking for `/meta`, generate the requisite JSON object and send it back
             if resource == "/meta"
                 serve_meta(http)
@@ -181,7 +182,7 @@ function start(;kwargs...)
                 # If it doesn't exist locally, let's request a fetch on that resource.
                 # This will return either `nothing` (e.g. resource does not exist) or
                 # a `DownloadState` that represents a partial download.
-                dl_state = fetch_resource(resource)
+                dl_state = fetch_resource(resource, request_id)
                 if dl_state !== nothing
                     stream_path = temp_resource_filepath(resource)
                     # Wait until `stream_path` is created
@@ -219,7 +220,7 @@ function start(;kwargs...)
                 # If we don't actually have the artifact locally, we need to fetch it first.
                 artifact_path = resource_filepath(artifact_resource)
                 if !isfile(artifact_path)
-                    dl_state = fetch_resource(artifact_resource)
+                    dl_state = fetch_resource(artifact_resource, request_id)
                     if dl_state !== nothing
                         # We actually need to wait for the download to finish so that we can
                         # calculate the SHA256 hash of the tarball.
