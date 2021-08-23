@@ -27,8 +27,8 @@ timestamp_logger(logger) = TransformerLogger(logger) do log
     merge(log, (; message = "[$(Dates.format(now(), date_format))] $(log.message)"))
 end
 
-# Keep 30 days of logs
-let fc = NFileCache(log_dir, 30, DiscardLRU(); predicate = x -> endswith(x, r"pkgserver\.log(\.gz)?"))
+# Keep 10 days of logs
+let fc = NFileCache(log_dir, 10*24, DiscardLRU(); predicate = x -> endswith(x, r"pkgserver\.log(\.gz)?"))
     global function postrotate(file)
         # Compress logfile and add to filecache
         gzip() do gz
@@ -43,7 +43,7 @@ global_logger(TeeLogger(
         MinLevelLogger(
             DatetimeRotatingFileLogger(
                 log_dir,
-                string(raw"yyyy-mm-dd-\p\k\g\s\e\r\v\e\r.\l\o\g");
+                string(raw"yyyy-mm-dd-HH-\p\k\g\s\e\r\v\e\r.\l\o\g");
                 rotation_callback = postrotate,
             ),
             Logging.Info,
