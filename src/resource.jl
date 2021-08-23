@@ -69,7 +69,7 @@ of `f()` is `false` or an exception is raised, the write will be aborted.
 
 Also tracks the file with the global LRU cache as configured in `config.cache`.
 """
-function write_atomic_lru(f::Function, resource::AbstractString)
+function write_atomic_lru(f::Function, resource::AbstractString, request_id::AbstractString)
     temp_file = temp_resource_filepath(resource)
     try
         # First, write a temp file into the `temp` directory:
@@ -81,14 +81,14 @@ function write_atomic_lru(f::Function, resource::AbstractString)
             # Calculate size of the file, notify the cache that we're adding
             # a file of that size, so it may need to shrink the cache:
             new_path = add!(config.cache, resource[2:end], filesize(temp_file))
-            @info("Moving", temp_file, new_path, filesize(temp_file))
+            @info("Moving", temp_file, new_path, filesize(temp_file), request_id)
             mv(temp_file, new_path; force=true)
         end
         return retval
     catch e
         rethrow(e)
     finally
-        @info("Deleting and pruning", temp_file)
+        @info("Deleting and pruning", temp_file, request_id)
         if isfile(temp_file)
             rm(temp_file; force=true)
         end
@@ -165,7 +165,7 @@ function update_registries()
                 end
 
                 # Try to fetch from our servers, but if something goes wrong, continue
-                dl_state = fetch_resource(resource, servers=hash_servers)
+                dl_state = fetch_resource(resource, "<registry_loop>", servers=hash_servers)
                 if dl_state === nothing
                     continue
                 end
@@ -310,7 +310,7 @@ are recorded and future downloads of that same resource will be skipped, until
 `forget_failures()` is called.  The `DownloadState` object contains within it enough
 information to still serve a resource as it is being downloaded in the background task.
 """
-function fetch_resource(resource::AbstractString; servers::Vector{String}=config.storage_servers)
+function fetch_resource(resource::AbstractString, request_id::AbstractString; servers::Vector{String}=config.storage_servers)
     if isempty(servers)
         @error("fetch called with no servers", resource)
         error("fetch called with no servers")
@@ -339,7 +339,7 @@ function fetch_resource(resource::AbstractString; servers::Vector{String}=config
 
         # Launch download process in a separate task:
         dl_task = @async begin
-            success = download(server, resource, content_length(response))
+            success = download(server, resource, content_length(response), request_id)
             lock(state.lock) do
                 if success
                     global fetch_hits += 1
@@ -418,12 +418,12 @@ function stream_file(io_in::IO, start_byte::Int, length::Int, dl_task::Task, io_
     return transmitted
 end
 
-function download(server::AbstractString, resource::AbstractString, content_length::Int)
-    @info "downloading resource" server=server resource=resource
+function download(server::AbstractString, resource::AbstractString, content_length::Int, request_id::AbstractString)
+    @info("downloading resource", server, resource, request_id)
     t_start = time()
     hash = basename(resource)
 
-    write_atomic_lru(resource) do temp_file, file_io
+    write_atomic_lru(resource, request_id) do temp_file, file_io
         # We've got a moderately complex flow of data here.  We manage it all using
         # asynchronous tasks and processes.  In summary, we need to download the given
         # resource, decompress it, and determine its tree hash.  Complicating this is the
@@ -478,7 +478,7 @@ function download(server::AbstractString, resource::AbstractString, content_leng
             return false
         end
         global payload_bytes_received += filesize(temp_file)
-        @info "download complete" server=server resource=resource elapsed=(time() - t_start)
+        @info("download complete", server, resource, elapsed=(time() - t_start), request_id)
 
         # Wait for the file read and tee tasks to finish
         #wait(file_read_task)
