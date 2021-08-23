@@ -58,6 +58,11 @@ destroy:
 	docker-compose down -v --remove-orphans
 	rm -rf logs build
 
+restart:
+	$(MAKE) down
+	rm -rf build
+	$(MAKE)
+
 clean:
 	rm -rf logs build
 
