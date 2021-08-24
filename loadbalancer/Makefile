@@ -1,6 +1,10 @@
 # Default target is to bring everything up
 all: up
 
+# Makefile hacks
+COMMA:=,
+SPACE:=$(eval) $(eval)
+
 # Extract configuration from `.env` file
 SERVER_REGION := $(shell bash -c "source .env 2>/dev/null && echo \$$SERVER_REGION")
 PKGSERVERS := $(shell bash -c "source .env 2>/dev/null && echo \$$PKGSERVERS")
@@ -15,11 +19,18 @@ DIRS := logs/nginx build
 $(DIRS):
 	mkdir -p $@
 
+# Generate the loadbalancer configuration
 build/loadbalancer.nginx.conf: conf/loadbalancer.nginx.conf .env | build
 	@export REGION=$(SERVER_REGION); \
 	export FQDN=$${REGION}.pkg.julialang.org; \
 	export PKGSERVERS_SERVER_BLOCK="$$(printf "    server pkgserver-%s.ipv6.cflo.at:443;\n" $(PKGSERVERS))"; \
 	envsubst '$${FQDN} $${REGION} $${PKGSERVERS_SERVER_BLOCK}' < $< > $@
+up: build/loadbalancer.nginx.conf
+
+# Generate static list of child servers we hide behind our broad, load-balancing shoulders
+build/children.json: .env | build
+	@echo "[ $(subst $(SPACE),$(COMMA) ,$(patsubst %,\"%\",$(PKGSERVERS))) ]" > $@
+up: build/children.json
 
 up: $(DIRS) build/loadbalancer.nginx.conf
 	docker-compose up --build --remove-orphans -d
