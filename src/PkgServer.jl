@@ -151,6 +151,12 @@ function start(;kwargs...)
                 serve_siblings(http)
                 return
             end
+            if resource == "/meta/children"
+                # PkgServers don't have children, but to be good neighbors,
+                # we return an empty list here, to make it easier to recurse.
+                serve_children(http)
+                return
+            end
             if resource == "/meta/parents"
                 serve_parents(http)
                 return
