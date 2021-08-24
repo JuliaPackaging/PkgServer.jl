@@ -190,6 +190,7 @@ function start(;kwargs...)
                 # a `DownloadState` that represents a partial download.
                 dl_state = fetch_resource(resource, request_id)
                 if dl_state !== nothing
+                    HTTP.setheader(http, "X-Cache-Miss" => "miss")
                     stream_path = temp_resource_filepath(resource)
                     # Wait until `stream_path` is created
                     while !isfile(stream_path) && dl_state.dl_task.state != :done
