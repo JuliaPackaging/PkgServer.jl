@@ -35,11 +35,9 @@ endif
 endif
 
 # We want to launch/build docker containers as our own UID, so we collect that from the environment
-UID=$(shell id -u)
-GID=$(shell id -g)
-USER=$(shell id -u -n)
-GROUP=$(shell id -g -n)
-export UID GID USER GROUP
+UID:=$(shell id -u)
+GID:=$(shell id -g)
+export UID GID
 
 DIRS := storage/cache storage/s3cache storage/static storage/temp
 DIRS += logs/nginx logs/pkgserver build
@@ -91,7 +89,7 @@ nginx-send-usr1:
 	docker-compose exec -T frontend /bin/bash -c 'kill -USR1 `pgrep -f "nginx: [m]aster"`'
 
 /etc/cron.daily/pkgserver: conf/cron.restart.conf
-	SOURCEDIR=$(shell pwd) PYTHONPATH=$(PYTHONPATH) envsubst < $< | sudo tee $@ >/dev/null
+	SOURCEDIR=$(shell pwd) PYTHONPATH=$(PYTHONPATH) UID=$(UID) GID=$(GID) envsubst < $< | sudo tee $@ >/dev/null
 	sudo chmod +x $@
 up: /etc/cron.daily/pkgserver
 
