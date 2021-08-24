@@ -12,6 +12,7 @@ services:
             # Mount in our nginx configs
             - ./build/loadbalancer.nginx.conf:/etc/nginx/user_conf.d/loadbalancer-${SERVER_FQDN:-default}.conf
             - ../deployment/conf/optimized.nginx.conf:/etc/nginx/nginx.conf
+            - ./build/children.json:/etc/nginx/children.json
             # Keep SSL certificates permanently
             - letsencrypt:/etc/letsencrypt
             # Store logs for us to peruse at our leisure
