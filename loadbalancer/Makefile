@@ -29,7 +29,7 @@ up: build/loadbalancer.nginx.conf
 
 # Generate static list of child servers we hide behind our broad, load-balancing shoulders
 build/children.json: .env | build
-	@echo "[ $(subst $(SPACE),$(COMMA) ,$(patsubst %,\"%\",$(PKGSERVERS))) ]" > $@
+	@echo "[$(subst $(SPACE),$(COMMA),$(patsubst %,\"https://%.pkg.julialang.org\",$(PKGSERVERS)))]" > $@
 up: build/children.json
 
 up: $(DIRS) build/loadbalancer.nginx.conf
