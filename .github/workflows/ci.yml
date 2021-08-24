@@ -53,7 +53,6 @@ jobs:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
         run: |
-          echo "Logging in to docker hub as ${DOCKER_USERNAME}"
           echo "${DOCKER_PASSWORD}" | docker login --username "${DOCKER_USERNAME}" --password-stdin
           cp deployment/.env.example deployment/.env
           make -C deployment local-build
