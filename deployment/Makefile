@@ -15,14 +15,24 @@ endif
 export PKG_SERVER_FQDN
 S3_MIRROR_BUCKET_LIST := $(shell bash -c "source .env 2>/dev/null && echo \$$S3_MIRROR_BUCKET_LIST")
 DISABLE_TLS := $(shell bash -c "source .env 2>/dev/null && echo \$$DISABLE_TLS")
-DISABLE_IPV6 := $(shell bash -c "source .env 2>/dev/null && echo \$$DISABLE_IPV6")
+DISABLE_INTERNAL_DNS := $(shell bash -c "source .env 2>/dev/null && echo \$$DISABLE_INTERNAL_DNS")
+DISABLE_INTERNAL_DNS_IPV6 := $(shell bash -c "source .env 2>/dev/null && echo \$$DISABLE_INTERNAL_DNS_IPV6")
 
 # If `DISABLE_TLS` is defined, use the `http` stanza instead of the `tls` one.
 LISTEN_SRC := $(if $(DISABLE_TLS),conf/stanza_http.conf,conf/stanza_tls.conf)
 MIRROR_SRC := conf/s3mirror.nginx.conf
 
-# If `DISABLE_IPV6` is defined, don't add the `ipv6` servername
-SERVERNAMES := $(PKG_SERVER_FQDN) pkgserver-$(PKG_SERVER_REGION).ip.cflo.at pkgserver-$(PKG_SERVER_REGION).ipv4.cflo.at $(if $(DISABLE_IPV6),,pkgserver-$(PKG_SERVER_REGION).ipv6.cflo.at)
+
+SERVERNAMES := $(PKG_SERVER_FQDN)
+# Allow the user to disable automatic certificate fetching for internal DNS names
+# This is important for the loadbalancer, but not for a naked PkgServer.
+ifneq ($(DISABLE_INTERNAL_DNS),1)
+SERVERNAMES += pkgserver-$(PKG_SERVER_REGION).ip.cflo.at
+SERVERNAMES += pkgserver-$(PKG_SERVER_REGION).ipv4.cflo.at
+ifneq ($(DISABLE_INTERNAL_DNS_IPV6),1)
+SERVERNAMES += pkgserver-$(PKG_SERVER_REGION).ipv6.cflo.at
+endif
+endif
 
 # We want to launch/build docker containers as our own UID, so we collect that from the environment
 UID=$(shell id -u)
