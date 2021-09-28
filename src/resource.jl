@@ -459,10 +459,14 @@ function download(server::AbstractString, resource::AbstractString, content_leng
         #tar_noskip_task = @async Tar.tree_hash(tar_noskip_buffio; skip_empty=false)
 
         # Initiate the HTTP request, and start the data flowing into the file
-        http_task = @async HTTP.get(server * resource,
-            status_exception = false,
-            response_stream = file_io,
-        )
+        http_task = @async begin
+            req = HTTP.get(server * resource,
+                status_exception = false,
+                response_stream = file_io,
+            )
+            close(file_io)
+            return req
+        end
 
         # Read data back out from that file into the decompressor
         # file_read_task = @async begin
