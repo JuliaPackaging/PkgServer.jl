@@ -10,7 +10,7 @@ jobs:
       - uses: julia-actions/setup-julia@v1
         with:
           # Keep in sync with the ci.yml and the Dockerfile
-          version: "1.6"
+          version: "1.7"
       - name: 'Pkg.update'
         run: |
           julia --project=. -e 'using Pkg; Pkg.update()'
