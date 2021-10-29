@@ -52,12 +52,15 @@ while true
 end
 
 @testset "Direct HTTP requests" begin
-    # Test that we get a sensical answer for /registries
-    response = HTTP.get("$(server_url)/registries")
-    @test response.status == 200
-    registry_url = chomp(String(response.body))
-    @test match(r"^/registry/([a-z0-9]+-){4}[a-z0-9]+/[a-z0-9]+$", registry_url) != nothing
-    registry_uuid, registry_treehash = split(registry_url, "/")[3:4]
+    # Test that we get a sensical answer for /registries{,.eager,.conservative}
+    local registry_uuid, registry_treehash
+    for registry_flavor in ("registries", "registries.eager", "registries.conservative")
+        response = HTTP.get("$(server_url)/$(registry_flavor)")
+        @test response.status == 200
+        registry_url = chomp(String(response.body))
+        @test match(r"^/registry/([a-z0-9]+-){4}[a-z0-9]+/[a-z0-9]+$", registry_url) !== nothing
+        registry_uuid, registry_treehash = split(registry_url, "/")[3:4]
+    end
 
     # Test asking for that registry directly, unpacking it and verifying the treehash
     mktemp() do tarball_path, tarball_io
@@ -68,7 +71,8 @@ end
     end
 
     # Verify that these files exist within the cache
-    @test isfile(joinpath(cache_dir, "..", "static", "registries"))
+    @test isfile(joinpath(cache_dir, "..", "static", "registries.eager"))
+    @test isfile(joinpath(cache_dir, "..", "static", "registries.conservative"))
     @test isfile(joinpath(cache_dir, "registry", registry_uuid, registry_treehash))
 
     # Next, hit the `/meta` endpoint, ensure that the version it reports matches with what we expect:

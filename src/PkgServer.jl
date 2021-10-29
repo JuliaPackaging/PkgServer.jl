@@ -22,8 +22,8 @@ include("dynamic.jl")
 mutable struct RegistryMeta
     # Upstream registry URL (e.g. "https://github.com/JuliaRegistries/General")
     upstream_url::String
-    # The latest hash we know about for this registry
-    latest_hash::Union{Nothing,String}
+    # The hash (for each flavor) for each registry
+    hashes::Dict{String,String}
 
     function RegistryMeta(url::String)
         # Check to ensure this path actually exists
@@ -36,7 +36,7 @@ mutable struct RegistryMeta
         if !endswith(url, ".git") && url_exists(git_url)
             url = git_url
         end
-        return new(url, nothing)
+        return new(url, Dict{String,String}())
     end
 end
 
@@ -99,7 +99,8 @@ function start(;kwargs...)
 
     # Update registries first thing
     @info("Performing initial registry update")
-    update_registries()
+    registry_flavor_list = ("eager", "conservative")
+    update_registries.(registry_flavor_list)
     global last_registry_update = now()
 
     # Experimental.@sync throws if _any_ of the tasks fail
@@ -109,7 +110,7 @@ function start(;kwargs...)
                 sleep(1)
                 @try_printerror begin
                     forget_failures()
-                    update_registries()
+                    update_registries.(registry_flavor_list)
                     last_registry_update = now()
                 end
             end
@@ -166,8 +167,17 @@ function start(;kwargs...)
                 return
             end
 
-            if resource  == "/registries"
-                open(joinpath(config.root, "static", "registries")) do io
+            if occursin(r"^/registries(\.[a-z]+)?$", resource)
+                # If they're asking for just "/registries", inspect headers to figure
+                # out which registry flavor they actually want, and if none is given,
+                # give them `conservative` by default, unless they are self-reporting
+                # as a CI bot, in which case we'll always point them to `eager`.
+                if resource == "/registries"
+                    ci = any([v == "t" for (k, v) in filter(!isempty, split(HTTP.header(http, "Julia-CI-Variables", ""), ";"))])
+                    flavor = HTTP.header(http, "Julia-Registry-Preference", ci ? "eager" : "conservative")
+                    resource = "/registries.$(flavor)"
+                end
+                open(joinpath(config.root, "static", basename(resource))) do io
                     serve_file(http, io, "text/plain")
                 end
                 return
