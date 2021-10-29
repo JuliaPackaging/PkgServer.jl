@@ -10,17 +10,17 @@ const resource_re = Regex("""
 """, "x")
 
 """
-    get_registries(server)
+    get_registries(server, flavor)
 
 Interrogate a storage server for a list of registries, match the response against the
 registries we are paying attention to, return dict mapping from registry UUID to its
 latest treehash.
 """
-function get_registries(server::AbstractString)
+function get_registries(server::AbstractString, flavor::AbstractString)
     regs = Dict{String,String}()
-    response = HTTP.get("$server/registries", status_exception = false)
+    response = HTTP.get("$server/registries.$(flavor)", status_exception = false)
     if response.status != 200
-        @error("Failure to fetch /registries", server, response.status)
+        @error("Failure to fetch /registries.$(flavor)", server, response.status)
         return regs
     end
     for line in eachline(IOBuffer(response.body))
@@ -30,7 +30,7 @@ function get_registries(server::AbstractString)
             uuid in keys(config.registries) || continue
             regs[uuid] = hash
         else
-            @error("invalid response", server, resource="registries", line)
+            @error("invalid response", server, resource="registries.$(flavor)", line)
         end
     end
     return regs
@@ -126,12 +126,12 @@ function verify_registry_hash(uuid::AbstractString, hash::AbstractString)
     return url === nothing || url_exists(url)
 end
 
-function update_registries()
+function update_registries(flavor::String)
     # collect current registry hashes from servers
     regs = Dict(uuid => Dict{String,Vector{String}}() for uuid in keys(config.registries))
     servers = Dict(uuid => Vector{String}() for uuid in keys(config.registries))
     for server in config.storage_servers
-        for (uuid, hash) in get_registries(server)
+        for (uuid, hash) in get_registries(server, flavor)
             push!(get!(regs[uuid], hash, String[]), server)
             push!(servers[uuid], server)
         end
@@ -173,29 +173,33 @@ function update_registries()
                 wait(dl_state.dl_task)
             end
 
-            if config.registries[uuid].latest_hash != hash
+            if get(config.registries[uuid].hashes, flavor, "") != hash
                 @info("new current registry hash", uuid, hash, hash_servers)
                 changed = true
             end
 
             # we've got a new registry hash to serve
-            config.registries[uuid].latest_hash = hash
+            config.registries[uuid].hashes[flavor] = hash
             break
         end
     end
 
-    # write new registry info to file
-    registries_path = joinpath(config.root, "static", "registries")
-    if changed || !isfile(registries_path)
-        new_registries = joinpath(config.root, "temp", "registries.tmp." * randstring())
-        mkpath(dirname(new_registries))
-        open(new_registries, "w") do io
-            for uuid in sort!(collect(keys(config.registries)))
-                println(io, "/registry/$(uuid)/$(config.registries[uuid].latest_hash)")
+    # write new registry info to file, for each flavor we publish
+    for flavor in ("eager", "conservative")
+        registries_path = joinpath(config.root, "static", "registries.$(flavor)")
+        if changed || !isfile(registries_path)
+            new_registries = joinpath(config.root, "temp", "registries.$(flavor).tmp." * randstring())
+            mkpath(dirname(new_registries))
+            open(new_registries, "w") do io
+                for uuid in sort!(collect(keys(config.registries)))
+                    if haskey(config.registries[uuid].hashes, flavor)
+                        println(io, "/registry/$(uuid)/$(config.registries[uuid].hashes[flavor])")
+                    end
+                end
             end
+            mkpath(dirname(registries_path))
+            mv(new_registries, registries_path; force=true)
         end
-        mkpath(dirname(registries_path))
-        mv(new_registries, registries_path; force=true)
     end
     return changed
 end
