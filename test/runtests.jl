@@ -52,7 +52,7 @@ try
     @info("Running test suite with configuration", server_url, cache_dir)
     include("tests.jl")
 finally
-    if server_process != nothing
+    if server_process !== nothing
         @info("Reaping automatically-started local PkgServer...")
         kill(server_process)
         wait(server_process)
