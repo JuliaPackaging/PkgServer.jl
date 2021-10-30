@@ -76,15 +76,16 @@ function get_general_time(treehash)
 end
 
 latest_time = get_general_time(latest_treehash)
-function get_server_registry_lag(server)
+function get_server_registry_lag(server, flavor)
     local registries
     try
-        registries = split(String(HTTP.get("$(server)/registries").body), "\n")
+        registries = split(String(HTTP.get("$(server)/registries.$(flavor)").body), "\n")
     catch e
         if isa(e, InterruptException)
             rethrow(e)
         end
-        @warn("Unable to fetch `/registries` from $(server)")
+        @warn("Unable to fetch `/registries.$(flavor)` from $(server)")
+        return Inf
     end
     treehash = basename(first(filter(r -> startswith(r, "/registry/$(gen_uuid)/"), registries)))
     time = get_general_time(treehash)
@@ -92,13 +93,21 @@ function get_server_registry_lag(server)
 end
 
 
-# Get the current registry hash for each server:
+# Get the current registry hashes for each server:
 @info("Storage Servers:")
 for server in storage_servers
-    @info(server, lag=get_server_registry_lag(server))
+    @info(
+        server,
+        eager_lag=get_server_registry_lag(server, "eager"),
+        conservative_lag=get_server_registry_lag(server, "conservative"),
+    )
 end
 
 @info("Pkg Servers:")
 for server in pkg_servers
-    @info(server, lag=get_server_registry_lag(server))
+    @info(
+        server,
+        eager_lag=get_server_registry_lag(server, "eager"),
+        conservative_lag=get_server_registry_lag(server, "conservative"),
+    )
 end
