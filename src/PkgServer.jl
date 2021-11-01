@@ -166,17 +166,19 @@ function start(;kwargs...)
                 serve_robots_txt(http)
                 return
             end
-
-            if occursin(r"^/registries(\.[a-z]+)?$", resource)
+            
+            if resource == "/registries"
                 # If they're asking for just "/registries", inspect headers to figure
                 # out which registry flavor they actually want, and if none is given,
                 # give them `conservative` by default, unless they are self-reporting
                 # as a CI bot, in which case we'll always point them to `eager`.
-                if resource == "/registries"
-                    ci = any([v == "t" for (k, v) in filter(!isempty, split(HTTP.header(http, "Julia-CI-Variables", ""), ";"))])
-                    flavor = HTTP.header(http, "Julia-Registry-Preference", ci ? "eager" : "conservative")
-                    resource = "/registries.$(flavor)"
-                end
+                ci = any([v == "t" for (k, v) in filter(!isempty, split(HTTP.header(http, "Julia-CI-Variables", ""), ";"))])
+                flavor = HTTP.header(http, "Julia-Registry-Preference", ci ? "eager" : "conservative")
+                serve_redirect(http, "/registries.$(flavor)")
+                return
+            end
+
+            if occursin(r"^/registries\.[a-z]+$", resource)
                 open(joinpath(config.root, "static", basename(resource))) do io
                     serve_file(http, io, "text/plain")
                 end
