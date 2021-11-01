@@ -154,6 +154,13 @@ function serve_json(http::HTTP.Stream, data)
     return serve_data(http, JSON3.write(data), "application/json")
 end
 
+function serve_redirect(http::HTTP.Stream, target::String)
+    HTTP.setheader(http, "Location" => target)
+    HTTP.setstatus(http, 302)
+    HTTP.startwrite(http)
+    return
+end
+
 libjulia_internal = C_NULL
 function get_num_live_tasks()
     global libjulia_internal

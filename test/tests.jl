@@ -31,9 +31,9 @@ function handle_http_error(e)
 end
 
 while true
-    # Try to get an HTTP 200 OK on /registries
+    # Try to get an HTTP 200 OK on /registries.eager
     response_code = try
-        HTTP.get("$(server_url)/registries"; retry = false, readtimeout=1).status
+        HTTP.get("$(server_url)/registries.eager"; retry = false, readtimeout=1).status
     catch e
         handle_http_error(e)
     end
@@ -44,7 +44,7 @@ while true
 
     # If we've been trying this for more than one minute, error out
     if (time() - t_start) >= 60
-        error("Unable to hit testing server at $(server_url)/registries, got HTTP $(response_code)")
+        error("Unable to hit testing server at $(server_url)/registries.eager, got HTTP $(response_code)")
     end
 
     # Sleep a bit between attempts
@@ -61,6 +61,10 @@ end
         @test match(r"^/registry/([a-z0-9]+-){4}[a-z0-9]+/[a-z0-9]+$", registry_url) !== nothing
         registry_uuid, registry_treehash = split(registry_url, "/")[3:4]
     end
+
+    # Also test that `/registries` is a redirect:
+    response = HTTP.get("$(server_url)/registries"; redirect=false)
+    @test response.status == 302
 
     # Test asking for that registry directly, unpacking it and verifying the treehash
     mktemp() do tarball_path, tarball_io
