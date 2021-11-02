@@ -99,8 +99,15 @@ function start(;kwargs...)
 
     # Update registries first thing
     @info("Performing initial registry update")
-    registry_flavor_list = ("eager", "conservative")
-    update_registries.(registry_flavor_list)
+    local registry_dotflavor_list
+    registry_dotflavor_list = (".eager", ".conservative")
+    if !any(update_registries.(registry_dotflavor_list))
+        @warn("Flavorless storage servers detected, falling back to flavorless mode")
+        registry_dotflavor_list = ("",)
+        if !any(update_registries.(registry_dotflavor_list))
+            error("Unable to get initial registry update!")
+        end
+    end
     global last_registry_update = now()
 
     # Experimental.@sync throws if _any_ of the tasks fail
@@ -110,7 +117,7 @@ function start(;kwargs...)
                 sleep(1)
                 @try_printerror begin
                     forget_failures()
-                    update_registries.(registry_flavor_list)
+                    update_registries.(registry_dotflavor_list)
                     last_registry_update = now()
                 end
             end
