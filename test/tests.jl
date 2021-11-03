@@ -140,7 +140,7 @@ end
             Pkg.add(Pkg.PackageSpec(;name="DotNET", version=v"0.1.0"))
             Pkg.add(Pkg.PackageSpec(;name="FIGlet", version=v"0.2.1"))
         end
-        prepare_for_deletion(temp_dir)
+        Base.Filesystem.prepare_for_deletion(temp_dir)
     end
 
     # Sleep until there's nothing left in the `temp` directory.

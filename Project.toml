@@ -19,6 +19,7 @@ SHA = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 SimpleBufferStream = "777ac1f9-54b0-4bf8-805c-2214025038e7"
 Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
 StructTypes = "856f2bd8-1eba-4b0a-8007-ebc267875bd4"
+TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 Tar = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
 
 [compat]
