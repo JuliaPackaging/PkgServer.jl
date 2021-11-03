@@ -62,7 +62,7 @@ function get_general_time(treehash)
                 close(p.in)
                 @info("skip_treehash: $(skip_treehash)")
             end
-            prepare_for_deletion(dir)
+            Base.Filesystem.prepare_for_deletion(dir)
         end
 
         commit = commit_for_tree(reg_dir, skip_treehash)

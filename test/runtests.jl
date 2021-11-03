@@ -1,4 +1,4 @@
-using PkgServer, Pkg, Pkg.TOML, HTTP, JSON3, Tar, Test
+using PkgServer, Pkg, TOML, HTTP, JSON3, Tar, Test
 
 # You can either perform the following setup:
 #  - Already-running PkgServer, located at $JULIA_PKG_SERVER
@@ -6,28 +6,6 @@ using PkgServer, Pkg, Pkg.TOML, HTTP, JSON3, Tar, Test
 #
 # Or you can leave those blank, and we'll start up a PkgServer for you,
 # running on a background process.
-
-if VERSION < v"1.5"
-    error("These tests require a PkgServer-compatible Julia version!")
-end
-
-# "Backport" of JuliaLang/julia#37206
-function prepare_for_deletion(path::AbstractString)
-    # Nothing to do for non-directories
-    if !isdir(path)
-        return
-    end
-
-    try chmod(path, filemode(path) | 0o333)
-    catch; end
-    for (root, dirs, files) in walkdir(path)
-        for dir in dirs
-            dpath = joinpath(root, dir)
-            try chmod(dpath, filemode(dpath) | 0o333)
-            catch; end
-        end
-    end
-end
 
 # If these are not set, we will attempt to auto-initiate them.
 server_process = nothing
@@ -63,5 +41,3 @@ finally
         end
     end
 end
-
-(@isdefined temp_dir) && prepare_for_deletion(temp_dir)
