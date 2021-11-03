@@ -21,6 +21,9 @@ if isempty(get(ENV, "JULIA_PKG_SERVER", "")) || isempty(get(ENV, "JULIA_PKG_SERV
     global server_process = run(`$(Base.julia_cmd()) --project=$(code_dir) $(code_dir)/bin/run_server.jl`; wait=false)
 end
 
+# Ensure that we don't end up spending time precompiling when we install stuff; it's useless
+ENV["JULIA_PKG_PRECOMPILE_AUTO"]="0"
+
 server_url = ENV["JULIA_PKG_SERVER"]
 cache_dir = joinpath(ENV["JULIA_PKG_SERVER_STORAGE_ROOT"], "cache")
 
