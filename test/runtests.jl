@@ -9,9 +9,9 @@ using PkgServer, Pkg, TOML, HTTP, JSON3, Tar, Test
 
 # If these are not set, we will attempt to auto-initiate them.
 server_process = nothing
+code_dir = dirname(@__DIR__)
 if isempty(get(ENV, "JULIA_PKG_SERVER", "")) || isempty(get(ENV, "JULIA_PKG_SERVER_STORAGE_ROOT", ""))
     # Start a background PkgServer as a separate process
-    code_dir = dirname(@__DIR__)
     temp_dir = mktempdir()
     ENV["JULIA_PKG_SERVER"] = "http://127.0.0.1:8000"
     ENV["JULIA_PKG_SERVER_STORAGE_ROOT"] = temp_dir
