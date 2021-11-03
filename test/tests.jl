@@ -1,7 +1,3 @@
-# Server may be sleepy and still waking up; wait until we can ask it for `/registries`
-t_start = time()
-@info("Waiting for PkgServer liveness")
-
 function handle_http_error(e)
     # New HTTP error code in 0.9.13+
     if isa(e, HTTP.TimeoutRequest.ReadTimeoutError)
@@ -30,28 +26,36 @@ function handle_http_error(e)
     rethrow(e)
 end
 
-while true
-    # Try to get an HTTP 200 OK on /registries.eager
-    response_code = try
-        HTTP.get("$(server_url)/registries.eager"; retry = false, readtimeout=1).status
-    catch e
-        handle_http_error(e)
-    end
+# Server may be sleepy and still waking up; wait until we can ask it for a certain resource
+function wait_for_server_liveness(server_url::String, resource::String = "registries.eager")
+    t_start = time()
+    @info("Waiting for PkgServer liveness")
 
-    if response_code == 200
-        break
-    end
+    while true
+        # Try to get an HTTP 200 OK on /$(resource)
+        response_code = try
+            HTTP.get("$(server_url)/$(resource)"; retry = false, readtimeout=1).status
+        catch e
+            handle_http_error(e)
+        end
 
-    # If we've been trying this for more than one minute, error out
-    if (time() - t_start) >= 60
-        error("Unable to hit testing server at $(server_url)/registries.eager, got HTTP $(response_code)")
-    end
+        if response_code == 200
+            break
+        end
 
-    # Sleep a bit between attempts
-    sleep(0.2)
+        # If we've been trying this for more than one minute, error out
+        if (time() - t_start) >= 60
+            error("Unable to hit testing server at $(server_url)/$(resource), got HTTP $(response_code)")
+        end
+
+        # Sleep a bit between attempts
+        sleep(0.2)
+    end
 end
 
 @testset "Direct HTTP requests" begin
+    wait_for_server_liveness(server_url)
+
     # Test that we get a sensical answer for /registries{,.eager,.conservative}
     local registry_uuid, registry_treehash
     for registry_flavor in ("registries", "registries.eager", "registries.conservative")
@@ -302,4 +306,29 @@ end
     @test HTTP.header(partial_resp, "Content-Range") == "bytes 0-1023/$(full_length)"
     @test HTTP.header(partial_resp, "Content-Length") == "1024"
     @test partial_resp.body == full_resp.body[1:1024]
+end
+
+@testset "Flavorless" begin
+    # Start another (very short-lived) PkgServer
+    flavorless_server_url = "http://127.0.0.1:8001"
+    server_env = Dict(
+        "JULIA_PKG_SERVER" => flavorless_server_url,
+        "JULIA_PKG_SERVER_STORAGE_ROOT" => mktempdir(),
+        "JULIA_PKG_SERVER_FQDN" => "starfleet-central.pkg.julialang.org",
+    )
+    server_process = run(pipeline(addenv(`$(Base.julia_cmd()) --project=$(code_dir) $(code_dir)/bin/run_flavorless_server.jl`, server_env); stdout, stderr); wait=false)
+
+    # Wait until `/registries` is live
+    wait_for_server_liveness(flavorless_server_url, "registries")
+
+    # Ensure that `/registries` is not a redirect
+    @test HTTP.get("$(flavorless_server_url)/registries", redirect=false).status == 200
+
+    # Test that `/registries.eager` and `/registries.conservative` both do not exist
+    @test HTTP.get("$(flavorless_server_url)/registries.eager"; status_exception = false).status == 404
+    @test HTTP.get("$(flavorless_server_url)/registries.conservative"; status_exception = false).status == 404
+
+    sleep(0.1)
+    kill(server_process)
+    wait(server_process)
 end

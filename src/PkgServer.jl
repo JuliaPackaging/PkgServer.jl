@@ -47,6 +47,7 @@ struct ServerConfig
     cache::SizeConstrainedFileCache
     registries::Dict{String,RegistryMeta}
     storage_servers::Vector{String}
+    dotflavors::Vector{String}
 
     # Default server config constructor
     function ServerConfig(; listen_addr = InetAddr(ip"127.0.0.1", 8000),
@@ -58,6 +59,10 @@ struct ServerConfig
                             storage_servers = [
                                 "https://us-east.storage.juliahub.com",
                                 "https://kr.storage.juliahub.com",
+                            ],
+                            dotflavors = [
+                                ".eager",
+                                ".conservative",
                             ],
                             keep_free=3*1024^3)
         # Right now, the only thing we store in `static/` is `/registries`
@@ -77,6 +82,7 @@ struct ServerConfig
             ),
             registries,
             sort!(storage_servers),
+            dotflavors,
         )
     end
 end
@@ -96,17 +102,19 @@ function start(;kwargs...)
     @info("Loading initial Server Config")
     # Create global config object
     global config = ServerConfig(;kwargs...)
+    flavorless_mode = config.dotflavors == [""]
 
     # Update registries first thing
     @info("Performing initial registry update")
-    local registry_dotflavor_list
-    registry_dotflavor_list = (".eager", ".conservative")
-    if !any(update_registries.(registry_dotflavor_list))
+    initial_update_changed = any(update_registries.(config.dotflavors))
+    if !flavorless_mode && !initial_update_changed
         @warn("Flavorless storage servers detected, falling back to flavorless mode")
-        registry_dotflavor_list = ("",)
-        if !any(update_registries.(registry_dotflavor_list))
-            error("Unable to get initial registry update!")
-        end
+        flavorless_mode = true
+        empty!(config.dotflavors)
+        push!(config.dotflavors, "")
+    end
+    if !initial_update_changed && !any(update_registries.(config.dotflavors))
+        error("Unable to get initial registry update!")
     end
     global last_registry_update = now()
 
@@ -117,7 +125,7 @@ function start(;kwargs...)
                 sleep(1)
                 @try_printerror begin
                     forget_failures()
-                    update_registries.(registry_dotflavor_list)
+                    update_registries.(config.dotflavors)
                     last_registry_update = now()
                 end
             end
@@ -174,7 +182,7 @@ function start(;kwargs...)
                 return
             end
             
-            if resource == "/registries"
+            if resource == "/registries" && !flavorless_mode
                 # If they're asking for just "/registries", inspect headers to figure
                 # out which registry flavor they actually want, and if none is given,
                 # give them `conservative` by default, unless they are self-reporting
@@ -185,8 +193,14 @@ function start(;kwargs...)
                 return
             end
 
-            if occursin(r"^/registries\.[a-z]+$", resource)
-                open(joinpath(config.root, "static", basename(resource))) do io
+            if occursin(r"^/registries(\.[a-z]+$)?", resource)
+                filepath = joinpath(config.root, "static", basename(resource))
+                if !isfile(filepath)
+                    HTTP.setstatus(http, 404)
+                    startwrite(http)
+                    return
+                end
+                open(filepath) do io
                     serve_file(http, io, "text/plain")
                 end
                 return
