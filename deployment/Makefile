@@ -67,6 +67,9 @@ up: $(DIRS) build/pkgserver.nginx.conf
 down:
 	docker-compose down --remove-orphans
 
+pull:
+	docker-compose pull
+
 # Rule to install logrotate configuration so that host-wide logrotate can
 # perform the logrotations, as well as run `make nginx-send-usr1`.
 PYTHON := "$(shell which python3 2>/dev/null || which python 2>/dev/null || which python2 2>/dev/null || echo "{python|python3|python2} not found")"
