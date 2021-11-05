@@ -21,7 +21,7 @@ end
 
 # Clone/update General registry
 gen_uuid = Base.UUID("23338594-aafe-5451-b93e-139f81909106")
-reg_dir = get_scratch!("Registry-General", Base.UUID("eac38ba3-4627-46d4-b1a1-bcb86ba22f8b"))
+reg_dir = get_scratch!(Base.UUID("eac38ba3-4627-46d4-b1a1-bcb86ba22f8b"), "Registry-General")
 latest_treehash = update_git_repo("https://github.com/JuliaRegistries/General", reg_dir)
 
 function commit_for_tree(repo_path, tree)
@@ -36,7 +36,6 @@ function commit_for_tree(repo_path, tree)
 end
 function commit_time(repo_path, commit)
     time_str = readchomp(`git -C $(repo_path) show --quiet --pretty='%cI' $(commit)`)
-    @show time_str
     ZonedDateTime(time_str, "yyyy-mm-ddTHH:MM:SSzzzzz")
 end
 
@@ -79,7 +78,7 @@ latest_time = get_general_time(latest_treehash)
 function get_server_registry_lag(server, flavor)
     local registries
     try
-        registries = split(String(HTTP.get("$(server)/registries.$(flavor)").body), "\n")
+        registries = split(String(HTTP.get("$(server)/registries.$(flavor)"; readtimeout=5).body), "\n")
     catch e
         if isa(e, InterruptException)
             rethrow(e)
@@ -89,25 +88,60 @@ function get_server_registry_lag(server, flavor)
     end
     treehash = basename(first(filter(r -> startswith(r, "/registry/$(gen_uuid)/"), registries)))
     time = get_general_time(treehash)
-    return latest_time - time
+    lag = canonicalize(latest_time - time)
+
+    # I don't like seeing "empty period" so I manually change it to "0 seconds"
+    if isempty(lag.periods)
+        return Second(0)
+    end
+    return lag
 end
 
+function async_server_responses(servers; flavors=("eager", "conservative"))
+    c = Channel(length(servers))
+    # One `async` to get all requests running and return immediately 
+    @async begin
+        # One `sync` so that we can `close()` once everything else is done
+        @sync begin
+            for server in servers
+                # Another `async` so that each server is processed in parallel
+                @async begin
+                    flavor_lags = Dict{String,Any}()
+                    @sync begin
+                        for flavor in flavors
+                            # Yet another `@async` so that each request to a single server
+                            # is done in parallel as well.
+                            @async flavor_lags[flavor] = get_server_registry_lag(server, flavor)
+                        end
+                    end
+                    # Once this particular server is done processing, `put!()` its results
+                    put!(c, (server, flavor_lags))
+                end
+            end
+        end
+        # After the overall `sync`, close to signify we're done
+        close(c)
+    end
+    return c
+end
+
+function print_servers(c::Channel)
+    while isopen(c) || isready(c)
+        try
+            server, flavor_lags = take!(c)
+            @info(server, (Symbol(string(k, "_lag")) => v for (k, v) in flavor_lags)...)
+        catch e
+            if isa(e, InvalidStateException) && e.state == :closed
+                continue
+            end
+            rethrow(e)
+        end
+    end
+end
 
 # Get the current registry hashes for each server:
 @info("Storage Servers:")
-for server in storage_servers
-    @info(
-        server,
-        eager_lag=get_server_registry_lag(server, "eager"),
-        conservative_lag=get_server_registry_lag(server, "conservative"),
-    )
-end
+print_servers(async_server_responses(storage_servers))
 
 @info("Pkg Servers:")
-for server in pkg_servers
-    @info(
-        server,
-        eager_lag=get_server_registry_lag(server, "eager"),
-        conservative_lag=get_server_registry_lag(server, "conservative"),
-    )
-end
+print_servers(async_server_responses(pkg_servers))
