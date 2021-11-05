@@ -107,11 +107,23 @@ function start(;kwargs...)
     # Update registries first thing
     @info("Performing initial registry update")
     initial_update_changed = any(update_registries.(config.dotflavors))
-    if !flavorless_mode && !initial_update_changed
-        @warn("Flavorless storage servers detected, falling back to flavorless mode")
-        flavorless_mode = true
-        empty!(config.dotflavors)
-        push!(config.dotflavors, "")
+    if !flavorless_mode
+        # Remove any old `registries` files from when we were a flavorless server
+        rm(joinpath(config.root, "static", "registries"); force=true)
+
+        if !initial_update_changed
+            @warn("Flavorless storage servers detected, falling back to flavorless mode")
+            flavorless_mode = true
+            empty!(config.dotflavors)
+            push!(config.dotflavors, "")
+        end
+    else
+        # Remove any old `registries.$(flavor)` files from when we were a flavorfull server
+        for f in readdir(joinpath(config.root, "static"); join=true)
+            if startswith(f, "registries.")
+                rm(f; force=true)
+            end
+        end
     end
     if !initial_update_changed && !any(update_registries.(config.dotflavors))
         error("Unable to get initial registry update!")
