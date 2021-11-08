@@ -17,8 +17,6 @@ services:
             JULIA_PKG_SERVER_LOGS_DIR: "/app/logs"
             JULIA_PKG_SERVER_FQDN: "${PKG_SERVER_FQDN}"
             JULIA_PKG_SERVER_STORAGE_SERVERS: "${STORAGE_SERVERS:-https://us-east.storage.juliahub.com,https://kr.storage.juliahub.com}"
-        # Limit the container to 1.5GB of RAM usage.
-        mem_limit: "1610612736"
         labels:
             com.centurylinklabs.watchtower.scope: "pkgserver.jl"
         healthcheck:
