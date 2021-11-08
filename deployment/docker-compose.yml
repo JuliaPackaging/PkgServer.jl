@@ -19,12 +19,13 @@ services:
             JULIA_PKG_SERVER_STORAGE_SERVERS: "${STORAGE_SERVERS:-https://us-east.storage.juliahub.com,https://kr.storage.juliahub.com}"
         labels:
             com.centurylinklabs.watchtower.scope: "pkgserver.jl"
+            autoheal: true
         healthcheck:
-            test: curl -f --retry 5 --max-time 5 --retry-delay 10 --retry-max-time 60 "http://localhost:8000/meta" || bash -c 'kill -s 15 $$(pidof julia) && (sleep 10; kill -s 9 $$(pidof julia))'
-            interval: 2m
-            timeout: 10s
+            test: ["CMD", "curl -f -m 1 'http://localhost:8000/meta'"]
+            interval: 30s
+            timeout: 2s
             retries: 3
-            start_period: 5m
+            start_period: 2m
     
     frontend:
         image: jonasal/nginx-certbot
@@ -63,5 +64,12 @@ services:
         labels:
             com.centurylinklabs.watchtower.scope: "pkgserver.jl"
 
+    # Auto restart docker containers when their status is reported as unhealthy
+    autoheal:
+        image: willfarrell/autoheal
+        restart: unless-stopped
+        volumes:
+            # Mount the docker socket
+            - /var/run/docker.sock:/var/run/docker.sock
 volumes:
     letsencrypt:
