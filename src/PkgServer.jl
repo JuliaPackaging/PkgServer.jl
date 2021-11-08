@@ -238,7 +238,7 @@ function start(;kwargs...)
                     HTTP.setheader(http, "X-Cache-Miss" => "miss")
                     stream_path = temp_resource_filepath(resource)
                     # Wait until `stream_path` is created
-                    while !isfile(stream_path) && dl_state.dl_task.state != :done
+                    while !isfile(stream_path) && !istaskdone(dl_state.dl_task)
                         sleep(0.001)
                     end
                     # Try to serve `stream_path` file

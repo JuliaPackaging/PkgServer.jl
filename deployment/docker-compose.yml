@@ -19,9 +19,9 @@ services:
             JULIA_PKG_SERVER_STORAGE_SERVERS: "${STORAGE_SERVERS:-https://us-east.storage.juliahub.com,https://kr.storage.juliahub.com}"
         labels:
             com.centurylinklabs.watchtower.scope: "pkgserver.jl"
-            autoheal: true
+            autoheal: "true"
         healthcheck:
-            test: ["CMD", "curl -f -m 1 'http://localhost:8000/meta'"]
+            test: ["CMD", "curl", "-f", "-m", "1", "http://localhost:8000/meta"]
             interval: 30s
             timeout: 2s
             retries: 3
