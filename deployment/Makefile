@@ -125,6 +125,7 @@ destroy:
 restart:
 	$(MAKE) down
 	rm -rf build
+	rm -rf storage/temp
 	$(MAKE)
 
 clean:
