@@ -176,7 +176,7 @@ function get_num_live_tasks()
     if jl_live_tasks_addr === nothing
         return nothing
     end
-    live_tasks = ccall(jl_live_tasks_addr, Vector, ())
+    live_tasks = ccall(jl_live_tasks_addr, Vector{Task}, ())
     return length(filter(t -> t.state == :runnable, live_tasks))
 end
 
