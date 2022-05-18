@@ -70,6 +70,7 @@ function get_pkgserver_siblings()
         "eu-central",
         # Asia/Oceania
         "in",
+        "jp",
         "kr",
         "sg",
         # Special Chinese servers, serving from within-country
