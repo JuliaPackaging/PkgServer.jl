@@ -12,12 +12,15 @@ import Dates: DateTime, now
 import Pkg
 import Pkg.TOML
 import Pkg.Artifacts: download_artifact, artifact_path, artifact_names
-import Pkg.PlatformEngines: download_verify_unpack, probe_platform_engines!
+import Pkg.PlatformEngines: download_verify_unpack
 import Tar
 import TranscodingStreams: TranscodingStream
 import CodecZlib: GzipCompressor, GzipDecompressor
 
-probe_platform_engines!()
+if isdefined(Pkg.PlatformEngines, :probe_platform_engines!)
+    Pkg.PlatformEngines.probe_platform_engines!()
+end
+
 mkpath(clones_dir)
 mkpath(static_dir)
 mkpath(blacklist_dir)
@@ -379,3 +382,4 @@ open(joinpath(static_dir, "registries"), write=true) do io
         println(io, "/registry/$uuid/$tree_hash")
     end
 end
+        
