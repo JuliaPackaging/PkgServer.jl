@@ -2,7 +2,7 @@
 version: '2.3'
 services:
     loadbalancer:
-        image: jonasal/nginx-certbot
+        image: jonasal/nginx-certbot:3.3.1
         restart: unless-stopped
         environment:
             CERTBOT_EMAIL: "${CERTBOT_EMAIL:-info@foobar.com}"

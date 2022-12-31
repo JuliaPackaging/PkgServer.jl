@@ -28,7 +28,7 @@ services:
             start_period: 2m
     
     frontend:
-        image: jonasal/nginx-certbot
+        image: jonasal/nginx-certbot:3.3.1
         restart: unless-stopped
         environment:
             CERTBOT_EMAIL: "${CERTBOT_EMAIL:-info@foobar.com}"
