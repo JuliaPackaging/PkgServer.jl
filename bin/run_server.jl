@@ -27,6 +27,8 @@ timestamp_logger(logger) = TransformerLogger(logger) do log
     merge(log, (; message = "[$(Dates.format(now(), date_format))] $(log.message)"))
 end
 
+compress_logs = get(ENV, "JULIA_PKG_SERVER_COMPRESS_LOGS", "true") in ("True", "TRUE", "true")
+
 # Keep 10 days of logs
 let fc = NFileCache(log_dir, 10*24, DiscardLRU(); predicate = x -> endswith(x, r"pkgserver\.log(\.gz)?"))
     global function postrotate(file)
@@ -44,7 +46,7 @@ global_logger(TeeLogger(
             DatetimeRotatingFileLogger(
                 log_dir,
                 string(raw"yyyy-mm-dd-HH-\p\k\g\s\e\r\v\e\r.\l\o\g");
-                rotation_callback = postrotate,
+                rotation_callback = compress_logs ? postrotate : identity,
             ),
             Logging.Info,
         ),
