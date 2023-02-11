@@ -26,7 +26,7 @@ jobs:
         uses: peter-evans/create-pull-request@v3
         with:
           title: 'Automatic Pkg.update()'
-          author: 'GitHub <noreply@github.com>'
+          author: 'github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>'
           body: |
             Automatic `Pkg.update()` with the following changes:
             ```
