@@ -18,6 +18,7 @@ services:
             JULIA_PKG_SERVER_FQDN: "${PKG_SERVER_FQDN}"
             JULIA_PKG_SERVER_STORAGE_SERVERS: "${STORAGE_SERVERS:-https://us-east.storage.juliahub.com,https://kr.storage.juliahub.com}"
             JULIA_PKG_SERVER_FLAVORLESS: "${PKG_SERVER_FLAVORLESS:-false}"
+            JULIA_PKG_SERVER_REGISTRY_UPDATE_PERIOD: "${UPDATE_PERIOD:-1}"
         labels:
             com.centurylinklabs.watchtower.scope: "pkgserver.jl"
             autoheal: "true"

@@ -18,6 +18,7 @@ DISABLE_TLS := $(shell bash -c "source .env 2>/dev/null && echo \$$DISABLE_TLS")
 DISABLE_INTERNAL_DNS := $(shell bash -c "source .env 2>/dev/null && echo \$$DISABLE_INTERNAL_DNS")
 DISABLE_INTERNAL_DNS_IPV6 := $(shell bash -c "source .env 2>/dev/null && echo \$$DISABLE_INTERNAL_DNS_IPV6")
 PKG_SERVER_FLAVORLESS := $(shell bash -c "source .env 2>/dev/null && echo \$$FLAVLORLESS")
+UPDATE_PERIOD := $(shell bash -c "source .env 2>/dev/null && echo \$$UPDATE_PERIOD")
 
 # If `DISABLE_TLS` is defined, use the `http` stanza instead of the `tls` one.
 LISTEN_SRC := $(if $(DISABLE_TLS),conf/stanza_http.conf,conf/stanza_tls.conf)

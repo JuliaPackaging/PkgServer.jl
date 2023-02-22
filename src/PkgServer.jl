@@ -48,6 +48,7 @@ struct ServerConfig
     registries::Dict{String,RegistryMeta}
     storage_servers::Vector{String}
     dotflavors::Vector{String}
+    registry_update_period::Float64
 
     # Default server config constructor
     function ServerConfig(; listen_addr = InetAddr(ip"127.0.0.1", 8000),
@@ -64,7 +65,8 @@ struct ServerConfig
                                 ".eager",
                                 ".conservative",
                             ],
-                            keep_free=3*1024^3)
+                            keep_free=3*1024^3,
+                            registry_update_period=1)
         # Right now, the only thing we store in `static/` is `/registries`
         mkpath(joinpath(storage_root, "static"))
         # Downloads get stored into `temp`
@@ -83,6 +85,7 @@ struct ServerConfig
             registries,
             sort!(storage_servers),
             dotflavors,
+            registry_update_period,
         )
     end
 end
@@ -134,7 +137,7 @@ function start(;kwargs...)
     Base.Experimental.@sync begin
         global registry_update_task = @spawn begin
             while true
-                sleep(1)
+                sleep(config.registry_update_period)
                 @try_printerror begin
                     forget_failures()
                     update_registries.(config.dotflavors)
