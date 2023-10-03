@@ -18,6 +18,9 @@ function handle_http_error(e)
         end
     end
     # I don't know how this occurs, but it does sometimes.  Probably an HTTP bug.
+    # Seems to happen together with the readtimeout kwarg to HTTP.get. In
+    # particular, this also results in the "file size mismatch" error log
+    # message from serve_file(...).
     if isa(e, Base.EOFError)
         return -Base.Libc.ECONNRESET
     end
