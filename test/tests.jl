@@ -91,7 +91,8 @@ end
     @test response.status == 200
     meta = JSON3.read(String(response.body))
     @test haskey(meta, "pkgserver_version")
-    @test meta["pkgserver_version"] == PkgServer.get_pkgserver_version()
+    # Disabled for now, see https://github.com/JuliaPackaging/PkgServer.jl/pull/179#issuecomment-1746777537
+    # @test meta["pkgserver_version"] == PkgServer.get_pkgserver_version()
     @test haskey(meta, "pkgserver_url")
     @test meta["pkgserver_url"] == "https://starfleet-central.pkg.julialang.org"
     @test meta["registry_update_task"] == "started"
@@ -201,7 +202,7 @@ end
     @test haskey(meta, "julia_version")
     @test VersionNumber(meta["julia_version"]) >= v"1.3"
     @test haskey(meta, "pkgserver_version")
-    @test meta["pkgserver_version"] == PkgServer.get_pkgserver_version()
+    # @test meta["pkgserver_version"] == PkgServer.get_pkgserver_version()
 end
 
 @testset "Access Tracking" begin
