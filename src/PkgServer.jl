@@ -13,12 +13,16 @@ using Sockets
 using Sockets: InetAddr
 using Dates
 using Tar
+using SHA
 using Gzip_jll
+import Base64
 
 include("task_utils.jl")
 include("resource.jl")
 include("meta.jl")
+include("admin.jl")
 include("dynamic.jl")
+
 mutable struct RegistryMeta
     # Upstream registry URL (e.g. "https://github.com/JuliaRegistries/General")
     upstream_url::String
@@ -49,6 +53,7 @@ struct ServerConfig
     storage_servers::Vector{String}
     dotflavors::Vector{String}
     registry_update_period::Float64
+    hashed_basic_auth_header::Union{String, Nothing}
 
     # Default server config constructor
     function ServerConfig(; listen_addr = InetAddr(ip"127.0.0.1", 8000),
@@ -86,6 +91,7 @@ struct ServerConfig
             sort!(storage_servers),
             dotflavors,
             registry_update_period,
+            hashed_basic_auth_header(),
         )
     end
 end
@@ -196,7 +202,11 @@ function start(;kwargs...)
                 serve_robots_txt(http)
                 return
             end
-            
+            if startswith(resource, "/admin")
+                handle_admin(http)
+                return
+            end
+
             if resource == "/registries" && !flavorless_mode
                 # If they're asking for just "/registries", inspect headers to figure
                 # out which registry flavor they actually want, and if none is given,
