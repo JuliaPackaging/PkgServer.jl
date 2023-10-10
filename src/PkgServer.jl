@@ -18,7 +18,9 @@ using Gzip_jll
 include("task_utils.jl")
 include("resource.jl")
 include("meta.jl")
+include("admin.jl")
 include("dynamic.jl")
+
 mutable struct RegistryMeta
     # Upstream registry URL (e.g. "https://github.com/JuliaRegistries/General")
     upstream_url::String
@@ -49,6 +51,7 @@ struct ServerConfig
     storage_servers::Vector{String}
     dotflavors::Vector{String}
     registry_update_period::Float64
+    admin_token_sha256::Union{String, Nothing}
 
     # Default server config constructor
     function ServerConfig(; listen_addr = InetAddr(ip"127.0.0.1", 8000),
@@ -73,6 +76,20 @@ struct ServerConfig
         mkpath(joinpath(storage_root, "temp"))
         # Files get stored into `cache`
         mkpath(joinpath(storage_root, "cache"))
+        # /admin interface requires an admin token which must be configured when starting
+        admin_token_sha256 = get(ENV, "JULIA_PKG_SERVER_ADMIN_TOKEN_SHA256", "")
+        if isempty(admin_token_sha256)
+            admin_token_sha256 = nothing
+        else
+            # Verify that this is a hex formatted sha256 hash sum
+            admin_token_sha256 = lowercase(admin_token_sha256)
+            if !occursin(r"^[a-f0-9]{64}$", admin_token_sha256)
+                @warn "The environment variable JULIA_PKG_SERVER_ADMIN_TOKEN_SHA256 is " *
+                      "configured but isn't a hex formatted SHA256-sum. " *
+                      "Disabling the /admin endpoint."
+                admin_token_sha256 = nothing
+            end
+        end
         return new(
             storage_root,
             listen_addr,
@@ -86,6 +103,7 @@ struct ServerConfig
             sort!(storage_servers),
             dotflavors,
             registry_update_period,
+            admin_token_sha256,
         )
     end
 end
@@ -196,7 +214,11 @@ function start(;kwargs...)
                 serve_robots_txt(http)
                 return
             end
-            
+            if startswith(resource, "/admin")
+                handle_admin(http)
+                return
+            end
+
             if resource == "/registries" && !flavorless_mode
                 # If they're asking for just "/registries", inspect headers to figure
                 # out which registry flavor they actually want, and if none is given,

@@ -112,6 +112,11 @@ end
     @test haskey(art_toml[art_name], "git-tree-sha1")
     @test art_toml[art_name]["git-tree-sha1"] == art_tree_hash
     @test haskey(art_toml[art_name], "download")
+
+    # /admin should be disabled
+    r = HTTP.get("$(server_url)/admin"; status_exception=false)
+    @test r.status == 404
+    @test occursin("The /admin endpoint is disabled", String(r.body))
 end
 
 function with_depot_path(f::Function, dp::Vector{String})
@@ -321,6 +326,93 @@ end
     # Test that `/registries.eager` and `/registries.conservative` both do not exist
     @test HTTP.get("$(flavorless_server_url)/registries.eager"; status_exception = false).status == 404
     @test HTTP.get("$(flavorless_server_url)/registries.conservative"; status_exception = false).status == 404
+
+    sleep(0.1)
+    kill(server_process, Base.SIGKILL)
+    wait(server_process)
+end
+
+@testset "/admin" begin
+    # Start a server with /admin enabled
+    port = "8123"
+    server_url = "http://127.0.0.1:$(port)"
+    storage_root = mktempdir()
+    server_env = Dict(
+        "JULIA_PKG_SERVER" => server_url,
+        "JULIA_PKG_SERVER_STORAGE_ROOT" => storage_root,
+        "JULIA_PKG_SERVER_REGISTRY_UPDATE_PERIOD" => "100",
+        "JULIA_PKG_SERVER_ADMIN_TOKEN_SHA256" => bytes2hex(sha256("hunter2")),
+    )
+    fd1, fd2 = devnull, devnull
+    # fd1, fd2 = stdout, stderr
+    server_process = run(pipeline(addenv(`$(Base.julia_cmd()) --project=$(code_dir) $(code_dir)/bin/run_server.jl`, server_env); stdout=fd1, stderr=fd2); wait=false)
+
+    # Wait until `/registries` is live
+    wait_for_server_liveness(server_url, "registries")
+
+    # Test various auth failure modes
+    for auth in [
+            "", "Bearer abc123", "Basic xyz123",
+            "Basic $(Base64.base64encode("admin"))",
+            "Basic $(Base64.base64encode("admin:"))",
+            "Basic $(Base64.base64encode("admin:hunter1"))",
+            "Basic $(Base64.base64encode(":hunter1"))",
+            "Basic $(Base64.base64encode("admin2:hunter2"))",
+        ]
+        headers = ["Authorization" => auth]
+        url = "http://127.0.0.1:$(port)/admin"
+        @test HTTP.get(url, headers; status_exception=false).status == 401
+    end
+
+    # /admin
+    auth_url = "http://admin:hunter2@127.0.0.1:$(port)"
+    r = HTTP.get("$(auth_url)/admin"; status_exception=false)
+    @test r.status == 200
+    @test occursin("Welcome to the /admin endpoint of the package server.", String(r.body))
+
+    # /admin/logs
+    function get_log_string(query = "")
+        io = IOBuffer()
+        try
+            # TODO: Is there a better way to cancel a request?
+            HTTP.get(
+                "$(auth_url)/admin/logs$(query)"; status_exception=false,
+                response_stream=io, retry=false, readtimeout=5,
+            )
+        catch err
+            @assert err isa HTTP.TimeoutError
+        end
+        return String(take!(io))
+    end
+
+    # Trigger some log messages by fetching Example@0.5.3
+    uuid = "7876af07-990d-54b4-ab0e-23690620f79a"
+    treehash = "46e44e869b4d90b96bd8ed1fdcf32244fddfb6cc"
+    cachefile = joinpath(storage_root, "cache", "package", uuid, treehash)
+
+    # Test with color
+    rm(cachefile; force=true)
+    @test !isfile(cachefile)
+    logmsg = @async get_log_string()
+    sleep(1)
+    r = HTTP.get("$(server_url)/package/$(uuid)/$(treehash)")
+    sleep(1)
+    @test isfile(cachefile)
+    msg = fetch(logmsg)
+    @test occursin("\e[36m\e[1mInfo: \e[22m\e[39mDeleting and pruning", msg)
+    @test occursin("/package/$(uuid)/$(treehash)", msg)
+
+    # Test with color
+    rm(cachefile; force=true)
+    @test !isfile(cachefile)
+    logmsg = @async get_log_string("?color=false")
+    sleep(1)
+    r = HTTP.get("$(server_url)/package/$(uuid)/$(treehash)")
+    sleep(1)
+    @test isfile(cachefile)
+    msg = fetch(logmsg)
+    @test occursin("Info: Deleting and pruning", msg)
+    @test occursin("/package/$(uuid)/$(treehash)", msg)
 
     sleep(0.1)
     kill(server_process, Base.SIGKILL)
