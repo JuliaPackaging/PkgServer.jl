@@ -4,6 +4,7 @@ authors = ["Stefan Karpinski <stefan@karpinski.org>", "Elliot Saba <staticfloat@
 version = "0.2.0"
 
 [deps]
+Base64 = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 FilesystemDatastructures = "89f0c457-83d8-4998-bfff-8b4a338c9833"
 Gzip_jll = "be1be57a-8558-53c3-a7e5-50095f79957e"
@@ -21,6 +22,7 @@ Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
 StructTypes = "856f2bd8-1eba-4b0a-8007-ebc267875bd4"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 Tar = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
+URIs = "5c2747f8-b7ea-4ff2-ba2e-563bfd36b1d4"
 
 [compat]
 HTTP = "1"
