@@ -19,4 +19,4 @@ $ JULIA_PKG_SERVER=http://localhost:8000 julia
 
 ## Deployment
 
-See the [deployment](deployment) directory for an example `docker-compose` setup to easily deploy your own mirror Pkg server, with an optional SSL interface provided through `nginx` and `letsencrypt`.
+See the [deployment](deployment) directory for an example `docker compose` setup to easily deploy your own mirror Pkg server, with an optional SSL interface provided through `nginx` and `letsencrypt`.

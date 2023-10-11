@@ -1,6 +1,9 @@
 # Default target is to bring everything up
 all: up
 
+# Use docker compose if it exist, fall back to docker-compose
+COMPOSE=$(shell if docker compose version >/dev/null 2>&1; then echo "docker compose"; else echo "docker-compose"; fi)
+
 # Extract configuration from `.env` file
 PKG_SERVER_REGION := $(shell bash -c "source .env 2>/dev/null && echo \$$PKG_SERVER_REGION")
 ifeq ($(PKG_SERVER_REGION),)
@@ -60,13 +63,13 @@ build/pkgserver.nginx.conf: conf/pkgserver.nginx.conf ${LISTEN_SRC} | build
 	envsubst '$${LISTEN_BLOCK_SRC} $${LISTEN_BLOCK} $${MIRROR_BLOCK} $${REGION} $${FQDN}' < $< > $@
 
 up: $(DIRS) build/pkgserver.nginx.conf
-	docker-compose up --build --remove-orphans -d
+	${COMPOSE} up --build --remove-orphans -d
 
 down:
-	docker-compose down --remove-orphans
+	${COMPOSE} down --remove-orphans
 
 pull:
-	docker-compose pull
+	${COMPOSE} pull
 
 # Rule to install logrotate configuration so that host-wide logrotate can
 # perform the logrotations, as well as run `make nginx-send-usr1`.
@@ -84,9 +87,9 @@ include logrotate.make
 	sudo chmod +x $@
 up: /etc/cron.hourly/pkgserver
 
-# Rule to send nginx USR1 signal via docker-compose (used by `logrotate.conf`)
+# Rule to send nginx USR1 signal via docker compose (used by `logrotate.conf`)
 nginx-send-usr1:
-	docker-compose exec -T frontend /bin/bash -c 'kill -USR1 `pgrep -f "nginx: [m]aster"`'
+	${COMPOSE} exec -T frontend /bin/bash -c 'kill -USR1 `pgrep -f "nginx: [m]aster"`'
 
 /etc/cron.daily/pkgserver: conf/cron.restart.conf
 	SOURCEDIR=$(shell pwd) PYTHONPATH=$(PYTHONPATH) UID=$(UID) GID=$(GID) envsubst < $< | sudo tee $@ >/dev/null
@@ -109,17 +112,17 @@ dev-up:
 	
 
 stop-watchtower:
-	docker-compose stop watchtower
+	${COMPOSE} stop watchtower
 
 trigger-watchtower:
-	docker-compose run --rm watchtower --cleanup --scope pkgserver.jl --run-once
+	${COMPOSE} run --rm watchtower --cleanup --scope pkgserver.jl --run-once
 
 logs:
-	docker-compose logs -f --tail=100
+	${COMPOSE} logs -f --tail=100
 .PHONY: logs
 
 destroy:
-	docker-compose down -v --remove-orphans
+	${COMPOSE} down -v --remove-orphans
 	rm -rf logs storage build
 	sudo rm -f /etc/cron.hourly/pkgserver /etc/cron.daily/pkgserver
 

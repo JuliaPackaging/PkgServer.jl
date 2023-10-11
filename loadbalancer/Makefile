@@ -5,6 +5,9 @@ all: up
 COMMA:=,
 SPACE:=$(eval) $(eval)
 
+# Use docker compose if it exist, fall back to docker-compose
+COMPOSE=$(shell if docker compose version >/dev/null 2>&1; then echo "docker compose"; else echo "docker-compose"; fi)
+
 # Extract configuration from `.env` file
 SERVER_REGION := $(shell bash -c "source .env 2>/dev/null && echo \$$SERVER_REGION")
 PKGSERVERS := $(shell bash -c "source .env 2>/dev/null && echo \$$PKGSERVERS")
@@ -33,10 +36,10 @@ build/children.json: .env | build
 up: build/children.json
 
 up: $(DIRS) build/loadbalancer.nginx.conf
-	docker-compose up --build --remove-orphans -d
+	${COMPOSE} up --build --remove-orphans -d
 
 down:
-	docker-compose down --remove-orphans
+	${COMPOSE} down --remove-orphans
 
 # Rule to install logrotate configuration so that host-wide logrotate can
 # perform the logrotations, as well as run `make nginx-send-usr1`.
@@ -54,19 +57,19 @@ up: /etc/cron.hourly/loadbalancer
 
 include ../deployment/logrotate.make
 
-# Rule to send nginx USR1 signal via docker-compose (used by `logrotate.conf`)
+# Rule to send nginx USR1 signal via docker compose (used by `logrotate.conf`)
 nginx-send-usr1:
-	docker-compose exec -T loadbalancer /bin/bash -c 'kill -USR1 `pgrep -f "nginx: [m]aster"`'
+	${COMPOSE} exec -T loadbalancer /bin/bash -c 'kill -USR1 `pgrep -f "nginx: [m]aster"`'
 
 stop-watchtower:
-	docker-compose stop watchtower
+	${COMPOSE} stop watchtower
 
 logs:
-	docker-compose logs -f --tail=100
+	${COMPOSE} logs -f --tail=100
 .PHONY: logs
 
 destroy:
-	docker-compose down -v --remove-orphans
+	${COMPOSE} down -v --remove-orphans
 	rm -rf logs build
 
 restart:
