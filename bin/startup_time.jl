@@ -15,7 +15,8 @@ try
             end
         catch e
             if (isa(e, Base.IOError) && e.code == -Base.Libc.ECONNREFUSED) ||
-               (isa(e, HTTP.IOExtras.IOError) && e.e.code == -Base.Libc.ECONNREFUSED)
+                # TODO: Use ExceptionUnwrapping.jl documented API...
+               (isa(e, HTTP.ConnectError) && e.error.ex.code == -Base.Libc.ECONNREFUSED)
             else
                 @warn(e, typeof(e))
             end
@@ -34,4 +35,5 @@ try
     end
 finally
     kill(p)
+    wait(p)
 end
