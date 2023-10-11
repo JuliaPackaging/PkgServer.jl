@@ -11,6 +11,7 @@ function handle_http_error(e)
 
     # If it's a connection error, return the specific code, usually `ECONNREFUSED` or `EPIPE`
     if isa(e, HTTP.ConnectError)
+        # TODO: Use ExceptionUnwrapping.jl documented API...
         return e.error.ex.code
     end
 
