@@ -1,28 +1,17 @@
 function handle_http_error(e)
-    # New HTTP error code in 0.9.13+
-    if isa(e, HTTP.TimeoutRequest.ReadTimeoutError)
-        return -Base.Libc.ECONNRESET
-    end
-
-    if !isa(e, HTTP.IOExtras.IOError)
+    # If this is not an HTTP error at all, rethrow it immediately
+    if !isa(e, HTTP.Exceptions.HTTPError)
         rethrow(e)
     end
 
-    # Peel it to get the inner exception
-    e = e.e
-
-    # If it just can't connect, deal with it silently, otherwise rethrow
-    if isa(e, Base.IOError)
-        if e.code in (-Base.Libc.ECONNREFUSED, -Base.Libc.EPIPE, -Base.Libc.ECONNRESET)
-            return e.code
-        end
-    end
-    # I don't know how this occurs, but it does sometimes.  Probably an HTTP bug.
-    # Seems to happen together with the readtimeout kwarg to HTTP.get. In
-    # particular, this also results in the "file size mismatch" error log
-    # message from serve_file(...).
-    if isa(e, Base.EOFError)
+    # If it's a timeout error, return `-ECONNRESET`
+    if isa(e, HTTP.TimeoutError)
         return -Base.Libc.ECONNRESET
+    end
+
+    # If it's a connection error, return the specific code, usually `ECONNREFUSED` or `EPIPE`
+    if isa(e, HTTP.ConnectError)
+        return e.error.ex.code
     end
 
     # If it's none of the "whitelisted" errors, rethrow it.
