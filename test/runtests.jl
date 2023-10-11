@@ -35,7 +35,8 @@ try
 finally
     if server_process !== nothing
         @info("Reaping automatically-started local PkgServer...")
-        kill(server_process)
+        # TODO: After upgrade to Julia 1.9 (from 1.7) this doesn't die from SIGTERM.
+        kill(server_process, Base.SIGKILL)
         wait(server_process)
         @info("Outputting testing PkgServer logs:")
         for f in filter(f -> endswith(f, "-pkgserver.log"), readdir("$(temp_dir)/logs"; join=true))
