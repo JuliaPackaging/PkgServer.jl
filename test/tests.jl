@@ -322,6 +322,6 @@ end
     @test HTTP.get("$(flavorless_server_url)/registries.conservative"; status_exception = false).status == 404
 
     sleep(0.1)
-    kill(server_process)
+    kill(server_process, Base.SIGKILL)
     wait(server_process)
 end
