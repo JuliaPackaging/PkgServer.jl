@@ -17,7 +17,6 @@ function _precompile_()
     ccall(:jl_generating_output, Cint, ()) == 1 || return nothing
     Base.precompile(Tuple{Core.kwftype(typeof(fetch_resource)),NamedTuple{(:servers,), Tuple{Vector{String}}},typeof(fetch_resource),String,String})
     Base.precompile(Tuple{typeof(get_registries),String,String})
-    Base.precompile(Tuple{typeof(serve_json),HTTP.Streams.Stream{HTTP.Messages.Request, HTTP.ConnectionPool.Transaction{TCPSocket}},Dict{String, Any}})
     Base.precompile(Tuple{typeof(verify_registry_hash),String,String})
     Base.precompile(Tuple{typeof(wait_first),Task,Vararg{Task}})
     isdefined(PkgServer, Symbol("#22#26")) && Base.precompile(Tuple{getfield(PkgServer, Symbol("#22#26"))})
