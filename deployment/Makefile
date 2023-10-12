@@ -121,6 +121,7 @@ logs:
 destroy:
 	docker-compose down -v --remove-orphans
 	rm -rf logs storage build
+	sudo rm -f /etc/cron.hourly/pkgserver /etc/cron.daily/pkgserver
 
 restart:
 	$(MAKE) down
