@@ -16,8 +16,6 @@ ENV JULIA_DEPOT_PATH="/depot"
 # every time we rebuild, since those files should change relatively slowly.
 ADD *.toml /app/
 RUN julia --project=/app -e "using Pkg; Pkg.instantiate(); Pkg.precompile()"
-# /depot/compiled is going to be modified by the user that actually runs this container
-RUN chmod 777 -R /depot/compiled
 
 # Our default command is to run the pkg server with the bundled `run_server.jl` script
 CMD ["julia", "--project=/app", "/app/bin/run_server.jl"]
@@ -27,3 +25,6 @@ ADD . /app
 
 # Precompile PkgServer
 RUN julia --project=/app -e "using PkgServer"
+
+# /depot/compiled is going to be modified by the user that actually runs this container
+RUN chmod 777 -R /depot/compiled
