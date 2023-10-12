@@ -22,7 +22,7 @@ jobs:
       matrix:
         # Keep in sync with pkg-update.yml and the Dockerfile
         julia-version:
-          - "1.7"
+          - "1.9"
         os:
           - ubuntu-latest
         julia-arch:
@@ -63,6 +63,9 @@ jobs:
           echo "JULIA_PKG_SERVER_STORAGE_ROOT=$(pwd)/deployment/storage" >> ${GITHUB_ENV}
       - uses: julia-actions/julia-buildpkg@latest
       - uses: julia-actions/julia-runtest@latest
+      - name: Startup time test
+        run: |
+          julia --project bin/startup_time.jl
       - name: Destroy Docker
         if: ${{ matrix.docker == 'true' }}
         run: |

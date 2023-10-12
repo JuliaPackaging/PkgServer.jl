@@ -2,7 +2,7 @@ using PkgServer, Pkg, TOML, HTTP, JSON3, Tar, Test
 
 # You can either perform the following setup:
 #  - Already-running PkgServer, located at $JULIA_PKG_SERVER
-#  - PkgServer cache directory located at $PKG_SERVER_CACHE_DIR
+#  - PkgServer cache directory located at $PKG_SERVER_STORAGE_DIR
 #
 # Or you can leave those blank, and we'll start up a PkgServer for you,
 # running on a background process.
@@ -35,7 +35,8 @@ try
 finally
     if server_process !== nothing
         @info("Reaping automatically-started local PkgServer...")
-        kill(server_process)
+        # TODO: After upgrade to Julia 1.9 (from 1.7) this doesn't die from SIGTERM.
+        kill(server_process, Base.SIGKILL)
         wait(server_process)
         @info("Outputting testing PkgServer logs:")
         for f in filter(f -> endswith(f, "-pkgserver.log"), readdir("$(temp_dir)/logs"; join=true))

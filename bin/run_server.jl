@@ -17,6 +17,16 @@ end
 const storage_root = get(ENV, "JULIA_PKG_SERVER_STORAGE_ROOT", "/tmp/pkgserver")
 const storage_servers = strip.(split(get(ENV, "JULIA_PKG_SERVER_STORAGE_SERVERS", "https://us-east.storage.juliahub.com,https://kr.storage.juliahub.com"), ","))
 const log_dir = get(ENV, "JULIA_PKG_SERVER_LOGS_DIR", joinpath(storage_root, "logs"))
+const flavorless = get(ENV, "JULIA_PKG_SERVER_FLAVORLESS", "false")
+const registry_update_period = parse(Float64, get(ENV, "JULIA_PKG_SERVER_REGISTRY_UPDATE_PERIOD", "1"))
+
+dotflavors = [
+    ".eager",
+    ".conservative",
+]
+if lowercase(flavorless) == "true"
+    dotflavors = [""]
+end
 
 mkpath(storage_root)
 mkpath(log_dir)
@@ -56,6 +66,8 @@ global_logger(TeeLogger(
 
 PkgServer.start(;
     listen_addr=Sockets.InetAddr(host, port),
-    storage_root=storage_root,
-    storage_servers=storage_servers,
+    storage_root,
+    storage_servers,
+    dotflavors,
+    registry_update_period,
 )

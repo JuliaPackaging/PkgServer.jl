@@ -17,6 +17,8 @@ services:
             JULIA_PKG_SERVER_LOGS_DIR: "/app/logs"
             JULIA_PKG_SERVER_FQDN: "${PKG_SERVER_FQDN}"
             JULIA_PKG_SERVER_STORAGE_SERVERS: "${STORAGE_SERVERS:-https://us-east.storage.juliahub.com,https://kr.storage.juliahub.com}"
+            JULIA_PKG_SERVER_FLAVORLESS: "${PKG_SERVER_FLAVORLESS:-false}"
+            JULIA_PKG_SERVER_REGISTRY_UPDATE_PERIOD: "${UPDATE_PERIOD:-1}"
         labels:
             com.centurylinklabs.watchtower.scope: "pkgserver.jl"
             autoheal: "true"
@@ -25,7 +27,7 @@ services:
             interval: 30s
             timeout: 2s
             retries: 3
-            start_period: 2m
+            start_period: 5m
     
     frontend:
         image: jonasal/nginx-certbot:3.3.1
