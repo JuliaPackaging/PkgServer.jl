@@ -9,6 +9,11 @@ WORKDIR /app
 RUN mkdir /depot
 ENV JULIA_DEPOT_PATH="/depot"
 
+# Make sure the image can be used on any x86_64 machine by setting JULIA_CPU_TARGET
+# to the same value used by the generic julia binaries, see
+# https://github.com/JuliaCI/julia-buildkite/blob/4b6932992f7985af71fc3f73af77abf4d25bd146/utilities/build_envs.sh#L23-L31
+ENV JULIA_CPU_TARGET="generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1)"
+
 # While we're trying to debug issues, load in some helpful tools
 #RUN apt update && apt install -y gdb procps
 
@@ -25,6 +30,3 @@ ADD . /app
 
 # Precompile PkgServer
 RUN julia --project=/app -e "using PkgServer"
-
-# /depot/compiled is going to be modified by the user that actually runs this container
-RUN chmod 777 -R /depot/compiled
