@@ -165,7 +165,9 @@ function start(;kwargs...)
         config.listen_server[] = listen_server
         @info("server listening", config.listen_addr)
         num_requests = 0
-        HTTP.listen(config.listen_addr.host, config.listen_addr.port; server=listen_server, max_connections=10) do http
+        access_log = logfmt"$remote_addr $http_x_real_ip [$time_iso8601] \"$request\" $status $body_bytes_sent \"$http_user_agent\" $http_julia_version $http_julia_system \"$http_julia_ci_variables\" $http_julia_interactive \"$http_julia_pkg_server\" \"$http_x_request_id\""
+        HTTP.listen(config.listen_addr.host, config.listen_addr.port;
+                    server=listen_server, max_connections=10, access_log=access_log) do http
             num_requests += 1
             resource = http.message.target
             request_id = HTTP.header(http, "X-Request-ID", "")
