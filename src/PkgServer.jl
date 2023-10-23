@@ -13,7 +13,7 @@ using Sockets
 using Sockets: InetAddr
 using Dates
 using Tar
-using SHA
+# using SHA
 using Gzip_jll
 import Base64
 
@@ -53,7 +53,7 @@ struct ServerConfig
     storage_servers::Vector{String}
     dotflavors::Vector{String}
     registry_update_period::Float64
-    hashed_basic_auth_header::Union{String, Nothing}
+    password_file::Union{String, Nothing}
 
     # Default server config constructor
     function ServerConfig(; listen_addr = InetAddr(ip"127.0.0.1", 8000),
@@ -71,13 +71,26 @@ struct ServerConfig
                                 ".conservative",
                             ],
                             keep_free=3*1024^3,
-                            registry_update_period=1)
+                            registry_update_period=1,
+                            password_file::Union{String, Nothing}=nothing,
+        )
         # Right now, the only thing we store in `static/` is `/registries`
         mkpath(joinpath(storage_root, "static"))
         # Downloads get stored into `temp`
         mkpath(joinpath(storage_root, "temp"))
         # Files get stored into `cache`
         mkpath(joinpath(storage_root, "cache"))
+        # /admin interface requires a password file and htpasswd binary
+        if password_file !== nothing
+            password_file = abspath(password_file)
+            if !isfile(password_file)
+                @warn "The input password file file doesn't exist. Disabling /admin endpoint." password_file
+                password_file = nothing
+            elseif Sys.which("htpasswd") === nothing
+                @warn "Can not find `htpasswd` binary in `PATH`. Disabling /admin endpoint."
+                password_file = nothing
+            end
+        end
         return new(
             storage_root,
             listen_addr,
@@ -91,7 +104,7 @@ struct ServerConfig
             sort!(storage_servers),
             dotflavors,
             registry_update_period,
-            hashed_basic_auth_header(),
+            password_file,
         )
     end
 end

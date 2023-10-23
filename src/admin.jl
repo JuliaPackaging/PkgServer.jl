@@ -1,36 +1,20 @@
 import Logging, LoggingExtras, URIs
 
-# The /admin endpoint is enabled by setting ${JULIA_PKG_SERVER_ADMIN_TOKEN} to
-# something non-empty. This acts as the password for the admin user used for
-# HTTP basic auth. **This should *only* be enabled if the server is secured
-# with HTTPS.**
+# The `/admin` endpoint is enabled by `htpasswd` and requires a password file and the
+# `htpasswd` binary. Without any of these `/admin` is disabled. The path to the password
+# file is passed to `PkgServer.start` using the keyword argument `password_file`. The
+# password file and users should be created with `htpasswd`. As an example, the following
+# creates an `admin` user with password `hunter2`:
 #
-# The token can be any string, but it is recommended to use a server-unique
-# long random string of characters and not a classical password, for example
-# the output of
+#     htpasswd -c -b -B .htpasswd admin hunter2
 #
-#     openssl rand -base64 48
-#
-# Authenticated requests will thus have the header
-#
-#     Authorization: Basic <credentials>
-#
-# where <credentials> are Base64 encoded concatenation of the username (admin)
-# and the admin token, i.e.
-#
-#     base64encode("admin:" * token)
-#
-# We precompute the SHA512 hash of this value and throw away the original token
-# from ENV. The hashed value is our "password database".
-function hashed_basic_auth_header()
-    if (token = get(ENV, "JULIA_PKG_SERVER_ADMIN_TOKEN", ""); !isempty(token))
-        basic_auth_header = Base64.base64encode("admin:" * token)
-        hashed_basic_auth_header = bytes2hex(SHA.sha512(basic_auth_header))
-        # delete!(ENV, "JULIA_PKG_SERVER_ADMIN_TOKEN")
-        return hashed_basic_auth_header
-    end
-    return nothing
-end
+# ************************************************************************************
+# *                                IMPORTANT                                         *
+# * The /admin endpoint must only be configured if the server is secured with HTTPS. *
+# * PkgServer itself only uses HTTP, so this has to be configured externally with    *
+# * e.g. a TLS terminating reverse proxy.                                            *
+# *                                IMPORTANT                                         *
+# ************************************************************************************
 
 function simple_http_response(http::HTTP.Stream, s::Int, msg::Union{String,Nothing}=nothing)
     HTTP.setstatus(http, s)
@@ -41,35 +25,56 @@ function simple_http_response(http::HTTP.Stream, s::Int, msg::Union{String,Nothi
         HTTP.setheader(http, "Content-Type" => "text/plain")
         HTTP.setheader(http, "Content-Length" => string(sizeof(msg)))
         HTTP.startwrite(http)
-        HTTP.write(http, msg)
+        write(http, msg)
     end
     return nothing
 end
 
-const admin_lock = ReentrantLock()
-
-function handle_admin(http::HTTP.Stream)
-    return @lock admin_lock handle_admin_locked(http)
+function invalid_auth(http)
+    msg = "Invalid Authorization header, invalid user, or invalid password.\n"
+    HTTP.setheader(http, "WWW-Authenticate" => "Basic")
+    return simple_http_response(http, 401, msg)
 end
 
 # Matches the base64 encoded data in "Basic <base64 data>"
 const basic_auth_regex = r"(?<=^Basic )(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})$"
+const userinfo_regex = r"^(?<username>.+?):(?<password>.+)$"
 
-function handle_admin_locked(http::HTTP.Stream)
-    # If no admin token set on start, tell the user
-    if config.hashed_basic_auth_header === nothing
-        msg = "The /admin endpoint is disabled, please configure the " *
-              "'JULIA_PKG_SERVER_ADMIN_TOKEN' variable to enable it.\n"
-        return simple_http_response(http, 200, msg)
+
+const admin_lock = ReentrantLock()
+
+function handle_admin(http::HTTP.Stream)
+    # If no /admin is disabled tell the user
+    if config.password_file === nothing
+        msg = "The /admin endpoint is disabled for this server " *
+              "(either no password file given or no `htpasswd` binary found)."
+        return simple_http_response(http, 404, msg)
     end
-    # Check authorization
+    # Check the Authorization header and extract username and password
     auth = HTTP.header(http, "Authorization", "")
     m = match(basic_auth_regex, auth)
-    if m !== nothing && bytes2hex(SHA.sha512(m.match)) == config.hashed_basic_auth_header
-        # All good, handle the request
-        return handle_admin_authenticated(http)
+    m === nothing && return invalid_auth(http)
+    userinfo = String(Base64.base64decode(m.match::AbstractString))
+    m = match(userinfo_regex, userinfo)
+    m === nothing && return invalid_auth(http)
+    # We have a username and password, ask htpasswd if they are valid
+    htpasswd_stderr, htpasswd_stdin = Pipe(), Pipe()
+    cmd = pipeline(
+        `htpasswd -iv $(config.password_file::String) $(m["username"]::AbstractString)`;
+        stdin=htpasswd_stdin, stderr=htpasswd_stderr,
+    )
+    proc = run(cmd; wait=false)
+    stderr_read_task= @async readchomp(htpasswd_stderr)
+    write(htpasswd_stdin, m["password"]::AbstractString)
+    close(htpasswd_stdin)
+    if !success(proc)
+        close(htpasswd_stderr)
+        msg = fetch(stderr_read_task)
+        @warn "Failed login attempt: $(msg)"
+        return invalid_auth(http)
     end
-    return simple_http_response(http, 403)
+    # All good, open sesame!
+    return @lock admin_lock handle_admin_authenticated(http)
 end
 
 original_logger = nothing
@@ -79,7 +84,6 @@ function handle_admin_authenticated(http::HTTP.Stream)
     method = http.message.method
     uri = URIs.URI(http.message.target)
     if uri.path == "/admin" && method == "GET"
-        @info "get help"
         admin_help = """
         Welcome to the /admin endpoint of the package server.
         The following admin tasks are currently implemented:
@@ -92,6 +96,10 @@ function handle_admin_authenticated(http::HTTP.Stream)
 
         Return the current logging state.
 
+        # `GET /admin/logging/tail`
+
+        `tail -f` for log messages
+
         # `POST /admin/logging`
 
         Change the logging state (enabling/disabling debug logging).
@@ -100,6 +108,26 @@ function handle_admin_authenticated(http::HTTP.Stream)
            debug logging.
         """
         return simple_http_response(http, 200, admin_help)
+    # elseif uri.path == "/admin/logging/tail" && method == "GET"
+
+    #     # HTTP.jl is veeeery spammy...
+    #     buf = SimpleBufferStream.BufferStream()
+    #     tail_logger = LoggingExtras.TeeLogger(
+    #         Logging.SimpleLogger(buf, Logging.BelowMinLevel),
+    #         # LoggingExtras.TransformerLogger(
+    #         #     # Since this logger accept all messages, not just debug, we prepend
+    #         #     # [admin] to make it easier to filter visually and programatically
+    #         #     log -> merge(log, (; message = "[admin] " * log.message)),
+    #         # ),
+    #         Logging.global_logger(),
+    #     )
+    #     prev_logger = Logging.global_logger(tail_logger)
+    #     @info "setting the logger"
+    #     HTTP.setstatus(http, 200)
+    #     HTTP.startwrite(http)
+    #     write(http, buf)
+    #     return
+
     elseif uri.path == "/admin/logging" && method == "GET"
         @debug "getting logging state"
         data = Dict("enable_debug" => original_logger !== nothing)

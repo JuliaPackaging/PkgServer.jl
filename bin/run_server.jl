@@ -62,10 +62,13 @@ global_logger(TeeLogger(
     current_logger(),
 ))
 
+password_file = get(ENV, "JULIA_PKG_SERVER_PASSWORD_FILE", nothing)
+
 PkgServer.start(;
     listen_addr=Sockets.InetAddr(host, port),
     storage_root,
     storage_servers,
     dotflavors,
     registry_update_period,
+    password_file,
 )

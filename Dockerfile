@@ -2,6 +2,9 @@
 FROM julia:1.9
 #FROM julia:dev
 
+# Install htpasswd
+RUN apt update && apt install -y apache2-utils
+
 # This Dockerfile must be built with a context of the top-level PkgServer.jl directory
 WORKDIR /app
 
