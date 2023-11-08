@@ -2,7 +2,7 @@
 
 julia_version = "1.9.3"
 manifest_format = "2.0"
-project_hash = "0e17921cfa9ed921cc24638d3f3b86150bc9af48"
+project_hash = "9405f99dc6dd666ebf4e049b8c6acb536d82561f"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -177,6 +177,12 @@ version = "1.4.1"
 [[deps.Printf]]
 deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+
+[[deps.Prometheus]]
+deps = ["CodecZlib", "HTTP", "SimpleBufferStream", "Sockets"]
+git-tree-sha1 = "43efa8ffb6a32a92ddfc7b62121b1bda050fee20"
+uuid = "f25c1797-fe98-4e0c-b252-1b4fe3b6bde6"
+version = "1.0.1"
 
 [[deps.REPL]]
 deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]

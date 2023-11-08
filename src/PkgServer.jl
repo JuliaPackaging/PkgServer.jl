@@ -17,6 +17,19 @@ using Tar
 using Gzip_jll
 import Base64
 
+
+using Prometheus
+
+const COLLECTOR_REGISTRY = Prometheus.CollectorRegistry()
+const REQUEST_COUNTER = Prometheus.Family{Prometheus.Counter}(
+    "http_requests_total",
+    "Number of process HTTP requests",
+    ("endpoint", );
+    registry = COLLECTOR_REGISTRY,
+)
+Prometheus.ProcessCollector(; registry=COLLECTOR_REGISTRY)
+Prometheus.GCCollector(; registry=COLLECTOR_REGISTRY)
+
 include("task_utils.jl")
 include("resource.jl")
 include("meta.jl")
@@ -183,15 +196,29 @@ function start(;kwargs...)
         listen_server = Sockets.listen(config.listen_addr)
         config.listen_server[] = listen_server
         @info("server listening", config.listen_addr)
-        num_requests = 0
         HTTP.listen(config.listen_addr.host, config.listen_addr.port; server=listen_server, max_connections=10) do http
-            num_requests += 1
+            let
+                # Reduce the cardinality of the labels
+                label_regex = r"""
+                ^/$ |                                  # /
+                ^/meta(?>$|(?=/)) |                    # /meta and /meta/*
+                ^/(?>registry|package|artifact)(?=/) | # /registry/*, /package/*, /artifact/*
+                ^/(?>registries|metrics)$              # /registries, /metrics
+                """x
+                uri = HTTP.URIs.URI(http.message.target)
+                m = match(label_regex, uri.path)
+                endpoint_label = m === nothing ? "<other>" : String(m.match)
+                Prometheus.inc(Prometheus.labels(REQUEST_COUNTER, (endpoint_label,)))
+            end
             resource = http.message.target
             request_id = HTTP.header(http, "X-Request-ID", "")
             # If the user is asking for `/meta`, generate the requisite JSON object and send it back
             if resource == "/meta"
                 serve_meta(http)
                 return
+            end
+            if resource == "/metrics"
+                return Prometheus.expose(http, COLLECTOR_REGISTRY)
             end
             if resource == "/meta/stats"
                 serve_meta_stats(http)
