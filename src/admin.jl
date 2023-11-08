@@ -70,14 +70,15 @@ function handle_admin(http::HTTP.Stream)
     if !success(proc)
         close(htpasswd_stderr)
         msg = fetch(stderr_read_task)
-        @warn "Failed login attempt: $(msg)"
+        @warn "/admin: failed login attempt: $(msg)"
         return invalid_auth(http)
     end
     # All good, open sesame!
     return @lock admin_lock handle_admin_authenticated(http)
 end
 
-original_logger = nothing
+admin_debug_level::Logging.LogLevel= Logging.Info
+original_logger::Union{Logging.AbstractLogger, Nothing} = nothing
 
 # If we end up here then the request is authenticated
 function handle_admin_authenticated(http::HTTP.Stream)
@@ -96,66 +97,53 @@ function handle_admin_authenticated(http::HTTP.Stream)
 
         Return the current logging state.
 
-        # `GET /admin/logging/tail`
-
-        `tail -f` for log messages
-
         # `POST /admin/logging`
 
         Change the logging state (enabling/disabling debug logging).
         **Body parameters**
-         - `enable_debug` (required): `true` to enable, and `false` to disable,
-           debug logging.
+         - `level` (required): `debug` or `info`.
         """
         return simple_http_response(http, 200, admin_help)
-    # elseif uri.path == "/admin/logging/tail" && method == "GET"
-
-    #     # HTTP.jl is veeeery spammy...
-    #     buf = SimpleBufferStream.BufferStream()
-    #     tail_logger = LoggingExtras.TeeLogger(
-    #         Logging.SimpleLogger(buf, Logging.BelowMinLevel),
-    #         # LoggingExtras.TransformerLogger(
-    #         #     # Since this logger accept all messages, not just debug, we prepend
-    #         #     # [admin] to make it easier to filter visually and programatically
-    #         #     log -> merge(log, (; message = "[admin] " * log.message)),
-    #         # ),
-    #         Logging.global_logger(),
-    #     )
-    #     prev_logger = Logging.global_logger(tail_logger)
-    #     @info "setting the logger"
-    #     HTTP.setstatus(http, 200)
-    #     HTTP.startwrite(http)
-    #     write(http, buf)
-    #     return
-
     elseif uri.path == "/admin/logging" && method == "GET"
-        @debug "getting logging state"
-        data = Dict("enable_debug" => original_logger !== nothing)
+        levelstr = admin_debug_level == Logging.Debug ? "debug" : "info"
+        data = Dict("level" => levelstr)
         return serve_json(http, data)
     elseif uri.path == "/admin/logging" && method == "POST"
-        @debug "setting logging state"
         body = JSON3.read(http)
-        if get(body, "enable_debug", nothing) == true
-            if original_logger === nothing
-                # Wrap original logger in a TeeLogger together with a logger that let's
-                # through debug-level messages
+        if get(body, "level", nothing) == "debug"
+            if admin_debug_level == Logging.Info
+                @debug "/admin: changing log state from info to debug"
+                # Augment the original logger with a logger that passes through
+                # debug-level messages
                 debug_logger = LoggingExtras.TeeLogger(
-                    LoggingExtras.TransformerLogger(
-                        # Since this logger accept all messages, not just debug, we prepend
-                        # [admin] to make it easier to filter visually and programatically
-                        log -> merge(log, (; message = "[admin] " * log.message)),
+                    LoggingExtras.EarlyFilteredLogger(
+                        function(log)
+                            return log._module == @__MODULE__() &&
+                                   Logging.Debug <= log.level < Logging.Info
+                        end,
                         Logging.SimpleLogger(stderr, Logging.BelowMinLevel),
                     ),
                     Logging.global_logger(),
                 )
                 global original_logger = Logging.global_logger(debug_logger)
+                global admin_debug_level = Logging.Debug
+            else
+                # Debugging already enabled, do nothing
+                @debug "/admin: log state already debug"
+                @assert admin_debug_level == Logging.Debug
             end
             return simple_http_response(http, 200)
-        elseif get(body, "enable_debug", nothing) == false
+        elseif get(body, "level", nothing) == "info"
             # Disable the extra debug logger by resetting the original logger
             if original_logger !== nothing
+                @debug "/admin: changing log state from debug to info"
                 Logging.global_logger(original_logger)
                 global original_logger = nothing
+                global admin_debug_level = Logging.Info
+            else
+                # Debugging already disabled, do nothing
+                @debug "/admin: log state already info"
+                @assert admin_debug_level == Logging.Info
             end
             return simple_http_response(http, 200)
         else
