@@ -241,6 +241,20 @@ end
     #@test stats["payload_bytes_transmitted"] > stats["payload_bytes_received"]
 end
 
+@testset "/metrics" begin
+    # Smoke tests to see that the `/metrics` endpoint works
+    response = HTTP.get("$(server_url)/metrics")
+    @test response.status == 200
+    metrics = String(response.body)
+    @test occursin(r"pkgserver_http_request_duration_seconds_count{target=\"/metrics\"} \d+", metrics)
+    @test occursin(r"pkgserver_cached_resource_files{resource_type=\"artifact\"} \d+", metrics)
+    @test occursin(r"pkgserver_cached_resource_files{resource_type=\"package\"} \d+", metrics)
+    @test occursin(r"pkgserver_cached_resource_files{resource_type=\"registry\"} \d+", metrics)
+    @test occursin(r"pkgserver_cached_resource_bytes{resource_type=\"artifact\"} \d+", metrics)
+    @test occursin(r"pkgserver_cached_resource_bytes{resource_type=\"package\"} \d+", metrics)
+    @test occursin(r"pkgserver_cached_resource_bytes{resource_type=\"registry\"} \d+", metrics)
+end
+
 @testset "Skip-nonskip ambiguity testing" begin
     art_yskip_hash = "00499ee910a92cd27ecab7620029a802136c1048"
     art_nskip_hash = "2da0ddeae4275db146c85efe7310b1d3148938d1"

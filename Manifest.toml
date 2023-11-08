@@ -2,7 +2,7 @@
 
 julia_version = "1.9.4"
 manifest_format = "2.0"
-project_hash = "debb167f2e73e4f0b3acdbb9c6435c1f0ce7a775"
+project_hash = "3b8d3297adb81323796c57c05239b9bd1602163e"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -62,9 +62,9 @@ version = "1.13.0+0"
 
 [[deps.HTTP]]
 deps = ["Base64", "CodecZlib", "ConcurrentUtilities", "Dates", "ExceptionUnwrapping", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "OpenSSL", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]
-git-tree-sha1 = "5eab648309e2e060198b45820af1a37182de3cce"
+git-tree-sha1 = "abbbb9ec3afd783a7cbd82ef01dcd088ea051398"
 uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
-version = "1.10.0"
+version = "1.10.1"
 
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
@@ -177,6 +177,12 @@ version = "1.4.1"
 [[deps.Printf]]
 deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+
+[[deps.Prometheus]]
+deps = ["CodecZlib", "HTTP", "SimpleBufferStream"]
+git-tree-sha1 = "d8bbfc599eee8be6539ffd9948213cd7479a4596"
+uuid = "f25c1797-fe98-4e0c-b252-1b4fe3b6bde6"
+version = "1.3.0"
 
 [[deps.REPL]]
 deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
