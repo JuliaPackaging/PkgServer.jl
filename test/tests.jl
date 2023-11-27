@@ -309,7 +309,7 @@ end
 
 @testset "Flavorless" begin
     # Start another (very short-lived) PkgServer
-    flavorless_server_url = "http://127.0.0.1:8001"
+    flavorless_server_url = "http://127.0.0.1:8002"
     server_env = Dict(
         "JULIA_PKG_SERVER" => flavorless_server_url,
         "JULIA_PKG_SERVER_STORAGE_ROOT" => mktempdir(),

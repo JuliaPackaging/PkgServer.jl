@@ -7,6 +7,8 @@ services:
         restart: unless-stopped
         expose:
             - 8000
+        ports:
+            - 8001:8000/tcp
         volumes:
             - ./storage:/app/storage
             - ./logs/pkgserver:/app/logs
@@ -29,7 +31,7 @@ services:
             timeout: 2s
             retries: 3
             start_period: 5m
-    
+
     frontend:
         image: jonasal/nginx-certbot:3.3.1
         restart: unless-stopped
