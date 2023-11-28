@@ -1,5 +1,6 @@
 # Ignore local configuration setup
 .env
+*.secret
 
 # Ignore locally-mounted `storage` and `logs` directories
 storage/
