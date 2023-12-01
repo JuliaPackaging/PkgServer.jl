@@ -20,8 +20,8 @@ include("admin_logging.jl")
 #
 # The token and the hash can, for example, be setup as with the following commands:
 # ```
-# openssl rand 32 \
-#     | openssl enc -A -base64 \
+# openssl rand -hex 32 \
+#     | head -c -1 \
 #     | tee admin_token.secret \
 #     | sha256sum - \
 #     | cut -d ' ' -f 1 \
