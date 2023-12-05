@@ -104,6 +104,9 @@ function handle_admin_authenticated(http::HTTP.Stream)
         color = get(params, "color", "true") == "true"
         req_level = get(params, "level", "info") == "debug" ? Logging.Debug : Logging.Info
         HTTP.setheader(http, "Content-Type" => "text/plain")
+        # Tell nginx to not buffer the response, see
+        # https://www.nginx.com/resources/wiki/start/topics/examples/x-accel/#x-accel-buffering
+        HTTP.setheader(http, "X-Accel-Buffering" => "no")
         HTTP.startwrite(http)
         attach(ADMIN_LOGGER) do level, message
             level < req_level && return
