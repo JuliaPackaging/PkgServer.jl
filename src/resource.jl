@@ -57,6 +57,7 @@ function prune_empty_parents(child, root)
     return
 end
 
+const CACHE_LOCK = ReentrantLock()
 
 """
     write_atomic_lru(f::Function, resource::AbstractString)
@@ -80,7 +81,7 @@ function write_atomic_lru(f::Function, resource::AbstractString, request_id::Abs
         if retval !== false
             # Calculate size of the file, notify the cache that we're adding
             # a file of that size, so it may need to shrink the cache:
-            new_path = add!(config.cache, resource[2:end], filesize(temp_file))
+            new_path = @lock CACHE_LOCK add!(config.cache, resource[2:end], filesize(temp_file))
             @info("Moving", temp_file, new_path, filesize(temp_file), request_id)
             mv(temp_file, new_path; force=true)
         end
@@ -175,6 +176,7 @@ function update_registries(dotflavor::String)
 
             if get(config.registries[uuid].hashes, dotflavor, "") != hash
                 @info("new current registry hash", uuid, hash, hash_servers)
+                Prometheus.inc(REGISTRY_UPDATE_COUNTER)
                 changed = true
             end
 
@@ -483,7 +485,9 @@ function download(server::AbstractString, resource::AbstractString, content_leng
             @warn "response status $(response.status)"
             return false
         end
-        global payload_bytes_received += filesize(temp_file)
+        bytes_received = filesize(temp_file)
+        global payload_bytes_received += bytes_received
+        Prometheus.inc(BYTES_RECEIVED, bytes_received)
         @info("download complete", server, resource, elapsed=(time() - t_start), request_id)
 
         # Wait for the file read and tee tasks to finish
@@ -574,6 +578,7 @@ function serve_file(http::HTTP.Stream,
     if http.message.method == "GET"
         transmitted = stream_file(io, startbyte, content_length, dl_task, http, buffer)
         global payload_bytes_transmitted += transmitted
+        Prometheus.inc(BYTES_SENT, transmitted)
         if transmitted != content_length
             @error("file size mismatch", content_length, actual=transmitted)
         end
