@@ -14,6 +14,7 @@ using Sockets: InetAddr
 using Dates
 using Tar
 using Gzip_jll
+using URIs: URIs
 
 
 include("metrics.jl")
@@ -195,8 +196,42 @@ function start(;kwargs...)
 end
 
 function handle_request(http::HTTP.Stream)
-    resource = http.message.target
+    method = http.message.method
+    uri = URIs.URI(http.message.target)
+    resource = uri.path
     request_id = HTTP.header(http, "X-Request-ID", "")
+
+    # Internal endpoint used by nginx to send a notification whenever it serves a file from
+    # the file cache. The original request uri for the resource is given in the
+    # `X-Original-URI` header. If nginx managed to serve the resource it means i) it is
+    # available on disk and ii) `config.cache` knows about this resource (theoretically it
+    # could have been removed in the very small window between nginx opening the file and we
+    # receiving the request here which is why we have some extra guards up).
+    if resource == "/notify" && method == "GET"
+        original_uri = HTTP.header(http, "X-Original-URI")
+        # This should always be true as long as the request comes from nginx
+        if !occursin(resource_re, original_uri)
+            HTTP.setstatus(http, 404)
+            HTTP.startwrite(http)
+            return
+        end
+        HTTP.setstatus(http, 204)
+        HTTP.startwrite(http)
+        # TODO: Locking of the cache should be upstreamed to FilesystemDatastructures.jl so
+        #       that all operations on the cache are safe by default.
+        @lock CACHE_LOCK begin
+            cache_key = original_uri[2:end] # strip the leading /
+            # Notify the cache about this access
+            FilesystemDatastructures.hit!(config.cache, cache_key)
+            # The cache also knows about the size of the resource which can be used to keep
+            # track of number of bytes sent by nginx
+            cache_entry = get(config.cache.entries, cache_key, nothing)
+            if cache_entry !== nothing
+                Prometheus.inc(NGINX_BYTES_TRANSMITTED, cache_entry.size)
+            end
+        end
+        return
+    end
     # If the user is asking for `/meta`, generate the requisite JSON object and send it back
     if resource == "/meta"
         serve_meta(http)
