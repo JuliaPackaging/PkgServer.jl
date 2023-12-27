@@ -49,9 +49,15 @@ const BYTES_RECEIVED = Prometheus.Counter(
     registry = COLLECTOR_REGISTRY,
 )
 
-const BYTES_SENT = Prometheus.Counter(
-    "pkgserver_sent_bytes_total",
-    "Total number of bytes sent to clients";
+const BYTES_TRANSMITTED = Prometheus.Counter(
+    "pkgserver_transmitted_bytes_total",
+    "Total number of bytes transmitted to clients";
+    registry = COLLECTOR_REGISTRY,
+)
+
+const NGINX_BYTES_TRANSMITTED = Prometheus.Counter(
+    "nginx_pkgserver_transmitted_bytes_total",
+    "Total number of bytes transmitted to clients by nginx";
     registry = COLLECTOR_REGISTRY,
 )
 

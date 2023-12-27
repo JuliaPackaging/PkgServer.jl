@@ -578,7 +578,7 @@ function serve_file(http::HTTP.Stream,
     if http.message.method == "GET"
         transmitted = stream_file(io, startbyte, content_length, dl_task, http, buffer)
         global payload_bytes_transmitted += transmitted
-        Prometheus.inc(BYTES_SENT, transmitted)
+        Prometheus.inc(BYTES_TRANSMITTED, transmitted)
         if transmitted != content_length
             @error("file size mismatch", content_length, actual=transmitted)
         end

@@ -147,7 +147,7 @@ function serve_data(http::HTTP.Stream, msg, content_type)
     startwrite(http)
     if http.message.method == "GET"
         written_bytes = write(http, msg)
-        Prometheus.inc(BYTES_SENT, written_bytes)
+        Prometheus.inc(BYTES_TRANSMITTED, written_bytes)
     end
     return
 end
