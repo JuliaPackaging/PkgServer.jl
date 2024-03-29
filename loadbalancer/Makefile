@@ -40,13 +40,13 @@ up: filepermissions
 build/loadbalancer.nginx.conf: conf/loadbalancer.nginx.conf .env | build
 	@export REGION=$(SERVER_REGION); \
 	export FQDN=$(SERVER_FQDN); \
-	export PKGSERVERS_SERVER_BLOCK="$$(printf "    server pkgserver-%s.ipv6.cflo.at:443;\n" $(PKGSERVERS))"; \
+	export PKGSERVERS_SERVER_BLOCK="$$(printf "    server %s:8000;\n" $(PKGSERVERS))"; \
 	envsubst '$${FQDN} $${REGION} $${PKGSERVERS_SERVER_BLOCK}' < $< > $@
 up: build/loadbalancer.nginx.conf
 
 # Generate static list of child servers we hide behind our broad, load-balancing shoulders
 build/children.json: .env | build
-	@echo "[$(subst $(SPACE),$(COMMA),$(patsubst %,\"https://%.pkg.julialang.org\",$(PKGSERVERS)))]" > $@
+	@echo "[]" > $@
 up: build/children.json
 
 up: $(DIRS) build/loadbalancer.nginx.conf

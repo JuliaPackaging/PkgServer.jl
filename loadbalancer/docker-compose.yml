@@ -12,6 +12,7 @@ services:
         restart: unless-stopped
         environment:
             CERTBOT_EMAIL: "${CERTBOT_EMAIL:-info@foobar.com}"
+            STAGING: "${STAGING:-0}"
         # Use `host` network mode so that we get proper ipv6 IP addresses
         network_mode: host
         volumes:
