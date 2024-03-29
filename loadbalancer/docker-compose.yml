@@ -1,28 +1,81 @@
 # This is the production docker-compose setup, complete with nginx TLS terminator
+
+x-pkgserver: &pkgserver
+  image: juliapackaging/pkgserver.jl
+  user: $UID:$GID
+  restart: unless-stopped
+  expose:
+    - 8000
+  environment:
+    JULIA_PKG_SERVER: "0.0.0.0:8000"
+    JULIA_PKG_SERVER_STORAGE_ROOT: "/app/storage"
+    JULIA_PKG_SERVER_LOGS_DIR: "/app/logs"
+    JULIA_PKG_SERVER_FQDN: "${SERVER_FQDN}"
+    JULIA_PKG_SERVER_STORAGE_SERVERS: "${STORAGE_SERVERS:-https://us-east.storage.juliahub.com,https://kr.storage.juliahub.com}"
+    JULIA_PKG_SERVER_FLAVORLESS: "${PKG_SERVER_FLAVORLESS:-false}"
+    JULIA_PKG_SERVER_REGISTRY_UPDATE_PERIOD: "${UPDATE_PERIOD:-1}"
+    JULIA_PKG_SERVER_ADMIN_TOKEN_SHA256: "${ADMIN_TOKEN_SHA256:-}"
+  labels:
+    autoheal: "true"
+  healthcheck:
+    test: ["CMD", "curl", "-f", "-m", "1", "http://localhost:8000/meta"]
+    interval: 30s
+    timeout: 2s
+    retries: 3
+    start_period: 5m
+
 services:
-    loadbalancer:
-        image: nginx-certbot
-        build:
-          context: .
-          dockerfile_inline: |
-            FROM jonasal/nginx-certbot:5.2.0
-            RUN groupadd --gid ${GID} nginx-host-uid && \
-                useradd --gid nginx-host-uid --no-create-home --home /nonexistent --comment "nginx user with host uid" --shell /bin/false --uid ${UID} nginx-host-uid
-        pull_policy: never
-        restart: unless-stopped
-        environment:
-            CERTBOT_EMAIL: "${CERTBOT_EMAIL:-info@foobar.com}"
-        # Use `host` network mode so that we get proper ipv6 IP addresses
-        network_mode: host
-        volumes:
-            # Mount in our nginx configs
-            - ./build/loadbalancer.nginx.conf:/etc/nginx/user_conf.d/loadbalancer-${SERVER_FQDN:-default}.conf
-            - ../deployment/conf/optimized.nginx.conf:/etc/nginx/nginx.conf
-            - ./build/children.json:/etc/nginx/children.json
-            # Keep SSL certificates permanently
-            - letsencrypt:/etc/letsencrypt
-            # Store logs for us to peruse at our leisure
-            - ./logs/nginx:/logs
+  loadbalancer:
+    image: nginx-certbot
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM jonasal/nginx-certbot:5.2.0
+        RUN groupadd --gid ${GID} nginx-host-uid && \
+            useradd --gid nginx-host-uid --no-create-home --home /nonexistent --comment "nginx user with host uid" --shell /bin/false --uid ${UID} nginx-host-uid
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      CERTBOT_EMAIL: "${CERTBOT_EMAIL:-info@foobar.com}"
+    # Use `host` network mode so that we get proper ipv6 IP addresses
+    network_mode: host
+    # ports:
+    #   - 80:80/tcp
+    #   - 443:443/tcp
+    #   - 8080:8080/tcp
+    volumes:
+      # Mount in our nginx configs
+      - ./build/loadbalancer.nginx.conf:/etc/nginx/user_conf.d/loadbalancer-${SERVER_FQDN:-default}.conf
+      - ../deployment/conf/optimized.nginx.conf:/etc/nginx/nginx.conf
+      # Keep SSL certificates permanently
+      - letsencrypt:/etc/letsencrypt
+      # Store logs for us to peruse at our leisure
+      - ./logs/nginx:/logs
+      # Nginx caches
+      - ./storage/cache:/caches/pkgserver
+      - ./storage/s3cache:/caches/s3
+
+  pkgserver1:
+    <<: *pkgserver
+    ports:
+      - 8001:8000/tcp
+    volumes:
+      - ./storage/pkgserver1:/app/storage
+      - ./logs/pkgserver1:/app/logs
+
+  pkgserver2:
+    <<: *pkgserver
+    ports:
+      - 8002:8000/tcp
+    volumes:
+      - ./storage/pkgserver2:/app/storage
+      - ./logs/pkgserver2:/app/logs
+
+  autoheal:
+    image: willfarrell/autoheal
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:
     letsencrypt:
