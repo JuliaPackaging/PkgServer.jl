@@ -1,5 +1,4 @@
 # This is the production docker-compose setup, complete with nginx TLS terminator
-version: '3.4'
 services:
     pkgserver:
         image: juliapackaging/pkgserver.jl
@@ -32,7 +31,7 @@ services:
             start_period: 5m
 
     frontend:
-        image: jonasal/nginx-certbot:3.3.1
+        image: jonasal/nginx-certbot:5.0.1
         restart: unless-stopped
         environment:
             CERTBOT_EMAIL: "${CERTBOT_EMAIL:-info@foobar.com}"
@@ -40,6 +39,7 @@ services:
             - 80:80/tcp
             - 443:443/tcp
             - 8000:8000/tcp
+            - 8080:8080/tcp # nginx /stub_status
         depends_on:
             - pkgserver
         volumes:
