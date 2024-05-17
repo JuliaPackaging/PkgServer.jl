@@ -1,15 +1,12 @@
 SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 
-# Use docker compose if it exist, fall back to docker-compose
-COMPOSE=$(shell if docker compose version >/dev/null 2>&1; then echo "docker compose"; else echo "docker-compose"; fi)
-
 K6 := docker run --rm -v $(SRCDIR):/config:ro -v $(SRCDIR)/results:/results --net=host -ti loadimpact/k6
 
 up:
-	${COMPOSE} up -d --remove-orphans
+	docker compose up -d --remove-orphans
 
 down:
-	${COMPOSE} down -v --remove-orphans
+	docker compose down -v --remove-orphans
 
 results:
 	mkdir -p $@

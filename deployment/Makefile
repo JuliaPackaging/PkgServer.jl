@@ -1,9 +1,6 @@
 # Default target is to bring everything up
 all: up
 
-# Use docker compose if it exist, fall back to docker-compose
-COMPOSE=$(shell if docker compose version >/dev/null 2>&1; then echo "docker compose"; else echo "docker-compose"; fi)
-
 # Extract configuration from `.env` file
 PKG_SERVER_REGION := $(shell bash -c "source .env 2>/dev/null && echo \$$PKG_SERVER_REGION")
 ifeq ($(PKG_SERVER_REGION),)
@@ -80,13 +77,13 @@ build/pkgserver.nginx.conf: conf/pkgserver.nginx.conf ${LISTEN_SRC} | build
 	envsubst '$${LISTEN_BLOCK_SRC} $${LISTEN_BLOCK} $${MIRROR_BLOCK} $${REGION} $${FQDN}' < $< > $@
 
 up: $(DIRS) build/pkgserver.nginx.conf
-	${COMPOSE} up --build --remove-orphans -d
+	docker compose up --build --remove-orphans -d
 
 down:
-	${COMPOSE} down --remove-orphans
+	docker compose down --remove-orphans
 
 pull:
-	${COMPOSE} pull
+	docker compose pull
 
 # Rule to install logrotate configuration so that host-wide logrotate can
 # perform the logrotations, as well as run `make nginx-send-usr1`.
@@ -99,7 +96,7 @@ include logrotate.make
 
 # Rule to send nginx USR1 signal via docker compose (used by `logrotate.conf`)
 nginx-send-usr1:
-	${COMPOSE} exec -T frontend /bin/bash -c 'kill -USR1 `pgrep -f "nginx: [m]aster"`'
+	docker compose exec -T frontend /bin/bash -c 'kill -USR1 `pgrep -f "nginx: [m]aster"`'
 
 PYTHON := "$(shell which python3 2>/dev/null || which python 2>/dev/null || which python2 2>/dev/null || echo "{python|python3|python2} not found")"
 PYTHONPATH := $(shell $(PYTHON) -c "import sys; print(':'.join(sys.path[1:]))")
@@ -124,19 +121,19 @@ dev-up:
 	
 
 stop-watchtower:
-	${COMPOSE} stop watchtower
+	docker compose stop watchtower
 
 trigger-watchtower:
-	${COMPOSE} run --rm watchtower --cleanup --scope pkgserver.jl --run-once
+	docker compose run --rm watchtower --cleanup --scope pkgserver.jl --run-once
 
 logs:
-	${COMPOSE} logs -f --tail=100
+	docker compose logs -f --tail=100
 .PHONY: logs
 
 # TODO: In the future we can remove /etc/cron.hourly/pkgserver but keep it here
 # for now so that we can cleanup the files we installed in the past.
 destroy:
-	${COMPOSE} down -v --remove-orphans
+	docker compose down -v --remove-orphans
 	rm -rf logs storage build
 	sudo rm -f /etc/cron.hourly/pkgserver /etc/cron.daily/pkgserver /etc/logrotate.d/pkgserver
 
