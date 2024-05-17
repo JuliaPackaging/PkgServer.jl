@@ -31,7 +31,14 @@ services:
             start_period: 5m
 
     frontend:
-        image: jonasal/nginx-certbot:5.0.1
+        image: docker-nginx-certbot
+        build:
+          context: .
+          dockerfile_inline: |
+            FROM jonasal/nginx-certbot:5.0.1
+            RUN groupadd --gid ${GID} nginx-host-uid && \
+                useradd --gid nginx-host-uid --no-create-home --home /nonexistent --comment "nginx user with host uid" --shell /bin/false --uid ${UID} nginx-host-uid
+        pull_policy: never
         restart: unless-stopped
         environment:
             CERTBOT_EMAIL: "${CERTBOT_EMAIL:-info@foobar.com}"
