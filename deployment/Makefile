@@ -39,8 +39,10 @@ endif
 
 # We want to launch/build docker containers as our own UID, so we collect that from the environment
 UID:=$(shell id -u)
+USER:=$(shell id -u -n)
 GID:=$(shell id -g)
-export UID GID
+GROUP:=$(shell id -g -n)
+export UID USER GID GROUP
 
 DIRS := storage/cache storage/s3cache storage/static storage/temp
 DIRS += logs/nginx logs/pkgserver build

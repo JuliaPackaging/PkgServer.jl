@@ -17,10 +17,11 @@ SERVER_FQDN := $(SERVER_REGION).pkg.julialang.org
 export SERVER_FQDN
 
 # We want to launch/build docker containers as our own UID, so we collect that from the environment
-UID=$(shell id -u)
-USER=$(shell id -u -n)
-GROUP=$(shell id -g -n)
-export UID USER GROUP
+UID:=$(shell id -u)
+USER:=$(shell id -u -n)
+GID:=$(shell id -g)
+GROUP:=$(shell id -g -n)
+export UID USER GID GROUP
 
 DIRS := logs/nginx build
 $(DIRS):
