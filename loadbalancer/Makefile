@@ -48,17 +48,10 @@ down:
 
 # Rule to install logrotate configuration so that host-wide logrotate can
 # perform the logrotations, as well as run `make nginx-send-usr1`.
-PYTHON := "$(shell which python3 2>/dev/null || which python 2>/dev/null || which python2 2>/dev/null || echo "{python|python3|python2} not found")"
-PYTHONPATH := $(shell $(PYTHON) -c "import sys; print(':'.join(sys.path[1:]))")
 /etc/logrotate.d/loadbalancer: ../deployment/conf/logrotate.conf
-	LOGDIR=$(shell pwd)/logs SOURCEDIR=$(shell pwd) PYTHONPATH=$(PYTHONPATH) envsubst < $< | sudo tee $@ >/dev/null
+	LOGDIR=$(shell pwd)/logs SOURCEDIR=$(shell pwd) \
+	envsubst '$${LOGDIR} $${SOURCEDIR} $${UID} $${GID} $${GROUP}' < $< | sudo tee $@ >/dev/null
 up: /etc/logrotate.d/loadbalancer
-
-# Rule to install cron.hourly configuration to tell nginx to reopen its logfiles
-/etc/cron.hourly/loadbalancer: ../deployment/conf/cron.logrotate.conf
-	SOURCEDIR=$(shell pwd) PYTHONPATH=$(PYTHONPATH) envsubst < $< | sudo tee $@ >/dev/null
-	sudo chmod +x $@
-up: /etc/cron.hourly/loadbalancer
 
 include ../deployment/logrotate.make
 
@@ -73,9 +66,12 @@ logs:
 	${COMPOSE} logs -f --tail=100
 .PHONY: logs
 
+# TODO: In the future we can remove /etc/cron.hourly/loadbalancer but keep it here
+# for now so that we can cleanup the files we installed in the past.
 destroy:
 	${COMPOSE} down -v --remove-orphans
 	rm -rf logs build
+	sudo rm -f /etc/cron.hourly/loadbalancer /etc/logrotate.d/loadbalancer
 
 restart:
 	$(MAKE) down
