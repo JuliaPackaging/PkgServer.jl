@@ -27,8 +27,14 @@ DIRS := logs/nginx build
 $(DIRS):
 	mkdir -p $@
 
+# Make sure nginx log files are created before starting nginx.
+NGINX_CURRENT_LOGFILES := logs/nginx/access_${SERVER_FQDN}.log logs/nginx/error_${SERVER_FQDN}.log
+$(NGINX_CURRENT_LOGFILES): logs/nginx
+	touch $@
+	chmod 0644 $@
+
 # Make sure files have the expected permissions
-filepermissions: logs/nginx
+filepermissions: logs/nginx $(NGINX_CURRENT_LOGFILES)
 	sudo chown -R $(UID):$(GID) logs
 .PHONY: filepermissions
 up: filepermissions
@@ -56,7 +62,7 @@ down:
 # perform the logrotations, as well as run `make nginx-send-usr1`.
 /etc/logrotate.d/loadbalancer: ../deployment/conf/logrotate.conf
 	LOGDIR=$(shell pwd)/logs SOURCEDIR=$(shell pwd) \
-	envsubst '$${LOGDIR} $${SOURCEDIR} $${UID} $${GID} $${GROUP}' < $< | sudo tee $@ >/dev/null
+	envsubst '$${LOGDIR} $${SOURCEDIR} $${UID} $${USER} $${GID} $${GROUP}' < $< | sudo tee $@ >/dev/null
 up: /etc/logrotate.d/loadbalancer
 
 include ../deployment/logrotate.make
