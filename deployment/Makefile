@@ -49,6 +49,14 @@ DIRS += logs/nginx logs/pkgserver build
 $(DIRS):
 	mkdir -p $@
 
+# Make sure files have the expected permissions: the nginx master process runs
+# as root and sometimes files created by this process trips up the package
+# server (which runs as a regular user).
+filepermissions: $(DIRS)
+	sudo chown -R $(UID):$(GID) logs storage
+.PHONY: filepermissions
+up: filepermissions
+
 # If our pkgserver is given a FQDN, then we splice in the TLS stanza, otherwise the HTTP stanza
 build/pkgserver.nginx.conf: conf/pkgserver.nginx.conf ${LISTEN_SRC} | build
 	@export FQDN="$(PKG_SERVER_FQDN)"; \

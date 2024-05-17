@@ -27,6 +27,12 @@ DIRS := logs/nginx build
 $(DIRS):
 	mkdir -p $@
 
+# Make sure files have the expected permissions
+filepermissions: logs/nginx
+	sudo chown -R $(UID):$(GID) logs
+.PHONY: filepermissions
+up: filepermissions
+
 # Generate the loadbalancer configuration
 build/loadbalancer.nginx.conf: conf/loadbalancer.nginx.conf .env | build
 	@export REGION=$(SERVER_REGION); \
