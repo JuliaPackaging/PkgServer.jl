@@ -12,6 +12,10 @@ COMPOSE=$(shell if docker compose version >/dev/null 2>&1; then echo "docker com
 SERVER_REGION := $(shell bash -c "source .env 2>/dev/null && echo \$$SERVER_REGION")
 PKGSERVERS := $(shell bash -c "source .env 2>/dev/null && echo \$$PKGSERVERS")
 
+# Set the server FQDN to `region.pkg.julialang.org`
+SERVER_FQDN := $(SERVER_REGION).pkg.julialang.org
+export SERVER_FQDN
+
 # We want to launch/build docker containers as our own UID, so we collect that from the environment
 UID=$(shell id -u)
 USER=$(shell id -u -n)
@@ -25,7 +29,7 @@ $(DIRS):
 # Generate the loadbalancer configuration
 build/loadbalancer.nginx.conf: conf/loadbalancer.nginx.conf .env | build
 	@export REGION=$(SERVER_REGION); \
-	export FQDN=$${REGION}.pkg.julialang.org; \
+	export FQDN=$(SERVER_FQDN); \
 	export PKGSERVERS_SERVER_BLOCK="$$(printf "    server pkgserver-%s.ipv6.cflo.at:443;\n" $(PKGSERVERS))"; \
 	envsubst '$${FQDN} $${REGION} $${PKGSERVERS_SERVER_BLOCK}' < $< > $@
 up: build/loadbalancer.nginx.conf
