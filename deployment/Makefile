@@ -104,7 +104,7 @@ nginx-send-usr1:
 PYTHON := "$(shell which python3 2>/dev/null || which python 2>/dev/null || which python2 2>/dev/null || echo "{python|python3|python2} not found")"
 PYTHONPATH := $(shell $(PYTHON) -c "import sys; print(':'.join(sys.path[1:]))")
 /etc/cron.daily/pkgserver: conf/cron.restart.conf
-	SOURCEDIR=$(shell pwd) PYTHONPATH=$(PYTHONPATH) UID=$(UID) GID=$(GID) envsubst < $< | sudo tee $@ >/dev/null
+	SOURCEDIR=$(shell pwd) envsubst '$${SOURCEDIR} $${UID} $${GID}' < $< | sudo tee $@ >/dev/null
 	sudo chmod +x $@
 up: /etc/cron.daily/pkgserver
 
