@@ -49,10 +49,17 @@ DIRS += logs/nginx logs/pkgserver build
 $(DIRS):
 	mkdir -p $@
 
+# Make sure nginx log files are created before starting nginx. Without this the
+# nginx master process (running as root) creates them with root as owner.
+NGINX_CURRENT_LOGFILES := logs/nginx/access_${PKG_SERVER_FQDN}.log logs/nginx/error_${PKG_SERVER_FQDN}.log
+$(NGINX_CURRENT_LOGFILES): logs/nginx
+	touch $@
+	chmod 0644 $@
+
 # Make sure files have the expected permissions: the nginx master process runs
 # as root and sometimes files created by this process trips up the package
 # server (which runs as a regular user).
-filepermissions: $(DIRS)
+filepermissions: $(DIRS) $(NGINX_CURRENT_LOGFILES)
 	sudo chown -R $(UID):$(GID) logs storage
 .PHONY: filepermissions
 up: filepermissions
@@ -85,7 +92,7 @@ pull:
 # perform the logrotations, as well as run `make nginx-send-usr1`.
 /etc/logrotate.d/pkgserver: conf/logrotate.conf
 	LOGDIR=$(shell pwd)/logs SOURCEDIR=$(shell pwd) \
-	envsubst '$${LOGDIR} $${SOURCEDIR} $${UID} $${GID} $${GROUP}' < $< | sudo tee $@ >/dev/null
+	envsubst '$${LOGDIR} $${SOURCEDIR} $${UID} $${USER} $${GID} $${GROUP}' < $< | sudo tee $@ >/dev/null
 up: /etc/logrotate.d/pkgserver
 
 include logrotate.make
