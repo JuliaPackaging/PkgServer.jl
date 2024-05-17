@@ -75,24 +75,19 @@ pull:
 
 # Rule to install logrotate configuration so that host-wide logrotate can
 # perform the logrotations, as well as run `make nginx-send-usr1`.
-PYTHON := "$(shell which python3 2>/dev/null || which python 2>/dev/null || which python2 2>/dev/null || echo "{python|python3|python2} not found")"
-PYTHONPATH := $(shell $(PYTHON) -c "import sys; print(':'.join(sys.path[1:]))")
 /etc/logrotate.d/pkgserver: conf/logrotate.conf
-	LOGDIR=$(shell pwd)/logs SOURCEDIR=$(shell pwd) PYTHONPATH=$(PYTHONPATH) envsubst < $< | sudo tee $@ >/dev/null
+	LOGDIR=$(shell pwd)/logs SOURCEDIR=$(shell pwd) \
+	envsubst '$${LOGDIR} $${SOURCEDIR} $${UID} $${GID} $${GROUP}' < $< | sudo tee $@ >/dev/null
 up: /etc/logrotate.d/pkgserver
 
 include logrotate.make
-
-# Rule to install cron.hourly configuration to tell nginx to reopen its logfiles
-/etc/cron.hourly/pkgserver: conf/cron.logrotate.conf
-	SOURCEDIR=$(shell pwd) PYTHONPATH=$(PYTHONPATH) envsubst < $< | sudo tee $@ >/dev/null
-	sudo chmod +x $@
-up: /etc/cron.hourly/pkgserver
 
 # Rule to send nginx USR1 signal via docker compose (used by `logrotate.conf`)
 nginx-send-usr1:
 	${COMPOSE} exec -T frontend /bin/bash -c 'kill -USR1 `pgrep -f "nginx: [m]aster"`'
 
+PYTHON := "$(shell which python3 2>/dev/null || which python 2>/dev/null || which python2 2>/dev/null || echo "{python|python3|python2} not found")"
+PYTHONPATH := $(shell $(PYTHON) -c "import sys; print(':'.join(sys.path[1:]))")
 /etc/cron.daily/pkgserver: conf/cron.restart.conf
 	SOURCEDIR=$(shell pwd) PYTHONPATH=$(PYTHONPATH) UID=$(UID) GID=$(GID) envsubst < $< | sudo tee $@ >/dev/null
 	sudo chmod +x $@
@@ -123,10 +118,12 @@ logs:
 	${COMPOSE} logs -f --tail=100
 .PHONY: logs
 
+# TODO: In the future we can remove /etc/cron.hourly/pkgserver but keep it here
+# for now so that we can cleanup the files we installed in the past.
 destroy:
 	${COMPOSE} down -v --remove-orphans
 	rm -rf logs storage build
-	sudo rm -f /etc/cron.hourly/pkgserver /etc/cron.daily/pkgserver
+	sudo rm -f /etc/cron.hourly/pkgserver /etc/cron.daily/pkgserver /etc/logrotate.d/pkgserver
 
 restart:
 	$(MAKE) down
