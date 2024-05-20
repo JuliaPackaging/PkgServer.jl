@@ -26,7 +26,7 @@ $(DIRS):
 
 # Make sure nginx log files are created before starting nginx.
 NGINX_CURRENT_LOGFILES := logs/nginx/access_${SERVER_FQDN}.log logs/nginx/error_${SERVER_FQDN}.log
-$(NGINX_CURRENT_LOGFILES): logs/nginx
+$(NGINX_CURRENT_LOGFILES): logs/nginx .env
 	touch $@
 	chmod 0644 $@
 
