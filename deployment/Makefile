@@ -53,8 +53,7 @@ $(DIRS):
 # nginx master process (running as root) creates them with root as owner.
 NGINX_CURRENT_LOGFILES := logs/nginx/access_${PKG_SERVER_FQDN}.log logs/nginx/error_${PKG_SERVER_FQDN}.log
 $(NGINX_CURRENT_LOGFILES): logs/nginx
-	touch $@
-	chmod 0644 $@
+	sudo touch $@ && sudo chown $(UID):$(GID) $@ && chmod 0644 $@
 
 # Make sure files have the expected permissions: the nginx master process runs
 # as root and sometimes files created by this process trips up the package
