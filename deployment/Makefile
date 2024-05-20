@@ -98,6 +98,10 @@ include logrotate.make
 nginx-send-usr1:
 	docker compose exec -T frontend /bin/bash -c 'kill -USR1 `pgrep -f "nginx: [m]aster"`'
 
+# Rule to send nginx HUP signal to reload configuration
+nginx-send-hup:
+	docker compose kill --signal=SIGHUP frontend
+
 PYTHON := "$(shell which python3 2>/dev/null || which python 2>/dev/null || which python2 2>/dev/null || echo "{python|python3|python2} not found")"
 PYTHONPATH := $(shell $(PYTHON) -c "import sys; print(':'.join(sys.path[1:]))")
 /etc/cron.daily/pkgserver: conf/cron.restart.conf

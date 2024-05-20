@@ -68,6 +68,10 @@ include ../deployment/logrotate.make
 nginx-send-usr1:
 	docker compose exec -T loadbalancer /bin/bash -c 'kill -USR1 `pgrep -f "nginx: [m]aster"`'
 
+# Rule to send nginx HUP signal to reload configuration
+nginx-send-hup:
+	docker compose kill --signal=SIGHUP loadbalancer
+
 stop-watchtower:
 	docker compose stop watchtower
 
