@@ -49,7 +49,7 @@ $(DIRS):
 # Make sure nginx log files are created before starting nginx. Without this the
 # nginx master process (running as root) creates them with root as owner.
 NGINX_CURRENT_LOGFILES := logs/nginx/access_${PKG_SERVER_FQDN}.log logs/nginx/error_${PKG_SERVER_FQDN}.log
-$(NGINX_CURRENT_LOGFILES): logs/nginx
+$(NGINX_CURRENT_LOGFILES): logs/nginx .env
 	touch $@
 	chmod 0644 $@
 
@@ -62,7 +62,7 @@ filepermissions: $(DIRS) $(NGINX_CURRENT_LOGFILES)
 up: filepermissions
 
 # If our pkgserver is given a FQDN, then we splice in the TLS stanza, otherwise the HTTP stanza
-build/pkgserver.nginx.conf: conf/pkgserver.nginx.conf ${LISTEN_SRC} | build
+build/pkgserver.nginx.conf: conf/pkgserver.nginx.conf ${LISTEN_SRC} .env | build
 	@export FQDN="$(PKG_SERVER_FQDN)"; \
 	export SERVERNAMES="$(SERVERNAMES)"; \
 	export LISTEN_BLOCK_SRC=$(LISTEN_SRC); \
