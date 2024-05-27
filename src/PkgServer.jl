@@ -273,7 +273,7 @@ function handle_request(http::HTTP.Stream)
         # out which registry flavor they actually want, and if none is given,
         # give them `conservative` by default, unless they are self-reporting
         # as a CI bot, in which case we'll always point them to `eager`.
-        ci = any([v == "t" for (k, v) in filter(!isempty, split(HTTP.header(http, "Julia-CI-Variables", ""), ";"))])
+        ci = any([v == "t" for (k, v) in split.(filter(!isempty, split(HTTP.header(http, "Julia-CI-Variables", ""), ";")), "=")])
         flavor = HTTP.header(http, "Julia-Registry-Preference", ci ? "eager" : "conservative")
         serve_redirect(http, "/registries.$(flavor)")
         return
