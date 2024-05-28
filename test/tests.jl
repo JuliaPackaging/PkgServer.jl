@@ -63,6 +63,13 @@ end
     response = HTTP.get("$(server_url)/registries"; redirect=false)
     @test response.status == 302
 
+    # Hitting `/registries` while reporting as a CI service should default to
+    # serving the eager flavor and the conservative flavor otherwise
+    conservative_response = HTTP.get("$(server_url)/registries")
+    @test endswith(conservative_response.request.target, ".conservative")
+    eager_response = HTTP.get("$(server_url)/registries", ["Julia-CI-Variables" => "CI=t"])
+    @test endswith(eager_response.request.target, ".eager")
+
     # Test asking for that registry directly, unpacking it and verifying the treehash
     mktemp() do tarball_path, tarball_io
         response = HTTP.get("$(server_url)/registry/$(registry_uuid)/$(registry_treehash)"; response_stream=tarball_io)
