@@ -66,7 +66,7 @@ include ../deployment/logrotate.make
 
 # Rule to send nginx USR1 signal via docker compose (used by `logrotate.conf`)
 nginx-send-usr1:
-	docker compose exec -T loadbalancer /bin/bash -c 'kill -USR1 `pgrep -f "nginx: [m]aster"`'
+	docker compose kill --signal=SIGUSR1 loadbalancer
 
 # Rule to send nginx HUP signal to reload configuration
 nginx-send-hup:
