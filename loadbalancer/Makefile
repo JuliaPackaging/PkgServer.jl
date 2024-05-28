@@ -72,9 +72,6 @@ nginx-send-usr1:
 nginx-send-hup:
 	docker compose kill --signal=SIGHUP loadbalancer
 
-stop-watchtower:
-	docker compose stop watchtower
-
 logs:
 	docker compose logs -f --tail=100
 .PHONY: logs
