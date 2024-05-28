@@ -61,8 +61,6 @@ services:
             - ./storage/cache:/caches/pkgserver/cache
             - ./storage/static:/caches/pkgserver/static
             - ./storage/s3cache:/caches/s3
-        labels:
-            com.centurylinklabs.watchtower.scope: "pkgserver.jl"
 
     # Auto-reload docker containers when their images are updated
     watchtower:
