@@ -22,7 +22,7 @@ jobs:
       matrix:
         # Keep in sync with pkg-update.yml and the Dockerfile
         julia-version:
-          - "1.9"
+          - "1.10"
         os:
           - ubuntu-latest
         julia-arch:
