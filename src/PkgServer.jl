@@ -71,7 +71,7 @@ struct ServerConfig
                                 ".eager",
                                 ".conservative",
                             ],
-                            keep_free=1*1024^3,
+                            keep_free=512*1024^2,
                             registry_update_period=1)
         # Right now, the only thing we store in `static/` is `/registries`
         mkpath(joinpath(storage_root, "static"))
