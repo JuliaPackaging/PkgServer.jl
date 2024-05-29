@@ -62,16 +62,16 @@ services:
             - ./storage/static:/caches/pkgserver/static
             - ./storage/s3cache:/caches/s3
 
-    # Auto-reload docker containers when their images are updated
-    watchtower:
-        image: containrrr/watchtower
-        restart: unless-stopped
-        volumes:
-            # Mount the docker socket
-            - /var/run/docker.sock:/var/run/docker.sock
-        command: --cleanup --scope pkgserver.jl --interval 28800
-        labels:
-            com.centurylinklabs.watchtower.scope: "pkgserver.jl"
+    # # Auto-reload docker containers when their images are updated
+    # watchtower:
+    #     image: containrrr/watchtower
+    #     restart: unless-stopped
+    #     volumes:
+    #         # Mount the docker socket
+    #         - /var/run/docker.sock:/var/run/docker.sock
+    #     command: --cleanup --scope pkgserver.jl --interval 28800
+    #     labels:
+    #         com.centurylinklabs.watchtower.scope: "pkgserver.jl"
 
     # Auto restart docker containers when their status is reported as unhealthy
     autoheal:
