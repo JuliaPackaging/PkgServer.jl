@@ -71,11 +71,30 @@ end
     @test endswith(eager_response.request.target, ".eager")
 
     # Test asking for that registry directly, unpacking it and verifying the treehash
+    # Clients without Accept-Encoding header should get gzip
     mktemp() do tarball_path, tarball_io
         response = HTTP.get("$(server_url)/registry/$(registry_uuid)/$(registry_treehash)"; response_stream=tarball_io)
         close(tarball_io)
         @test response.status == 200
+
+        format = PkgServer.detect_file_compression(tarball_path)
+        @test format == "gzip"
+
         @test registry_treehash == Tar.tree_hash(open(pipeline(`cat $(tarball_path)`, `gzip -d`), read=true))
+    end
+
+    # Clients that only accept zstd should get zstd
+    mktemp() do tarball_path, tarball_io
+        response = HTTP.get("$(server_url)/registry/$(registry_uuid)/$(registry_treehash)",
+                           ["Accept-Encoding" => "zstd"];
+                           response_stream=tarball_io)
+        close(tarball_io)
+        @test response.status == 200
+
+        format = PkgServer.detect_file_compression(tarball_path)
+        @test format == "zstd"
+
+        @test registry_treehash == Tar.tree_hash(open(pipeline(`zstd -d -c $(tarball_path)`), read=true))
     end
 
     # Verify that these files exist within the cache
@@ -277,6 +296,20 @@ end
 
         # Also test that it's available at its nskip hash:
         @test HTTP.head("$(server_url)/artifact/$(art_yskip_hash)").status == 200
+    end
+
+    # Test artifact download with zstd compression
+    mktemp() do tarball_path, tarball_io
+        response = HTTP.get("$(server_url)/artifact/$(art_yskip_hash)",
+                           ["Accept-Encoding" => "zstd"];
+                           response_stream=tarball_io)
+        close(tarball_io)
+        @test response.status == 200
+
+        format = PkgServer.detect_file_compression(tarball_path)
+        @test format == "zstd"
+
+        @test art_nskip_hash == Tar.tree_hash(open(pipeline(`zstd -d -c $(tarball_path)`), read=true))
     end
 end
 
