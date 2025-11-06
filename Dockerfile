@@ -20,13 +20,16 @@ ENV JULIA_CPU_TARGET="generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,bas
 # Copy in Project.toml/Manifest.toml, instantiate immediately, so that we don't have to do this
 # every time we rebuild, since those files should change relatively slowly.
 ADD *.toml /app/
-RUN julia --project=/app -e "using Pkg; Pkg.instantiate(); Pkg.precompile()"
+RUN julia --project=/app -e "using Pkg; Pkg.instantiate(allow_autoprecomp=false)"
 
-# Our default command is to run the pkg server with the bundled `run_server.jl` script
-CMD ["julia", "--project=/app", "/app/bin/run_server.jl"]
+# Precompile all direct dependencies (excluding PkgServer itself)
+RUN julia --project=/app -e "using Pkg, TOML; deps = collect(keys(TOML.parsefile(\"/app/Project.toml\")[\"deps\"])); Pkg.precompile(deps)"
 
 # Next, copy in full `PkgServer.jl` directory (this is the step that will most often be invalidated)
 ADD . /app
 
-# Precompile PkgServer
+# Precompile PkgServer itself (now that source files are present)
 RUN julia --project=/app -e "using PkgServer"
+
+# Our default command is to run the pkg server with the bundled `run_server.jl` script
+CMD ["julia", "--project=/app", "/app/bin/run_server.jl"]

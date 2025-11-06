@@ -24,6 +24,49 @@ include("meta.jl")
 include("admin.jl")
 include("dynamic.jl")
 
+# Detect compression format by reading file magic bytes
+function detect_file_compression(filepath::AbstractString)::Union{String,Nothing}
+    magic = open(filepath, "r") do io
+        read(io, min(4, filesize(io)))
+    end
+
+    # Zstd
+    if length(magic) >= 4 && magic[1:4] == [0x28, 0xB5, 0x2F, 0xFD]
+        return "zstd"
+    end
+    # Gzip
+    if length(magic) >= 2 && magic[1:2] == [0x1F, 0x8B]
+        return "gzip"
+    end
+
+    # Not enough bytes to detect or unknown format
+    return nothing
+end
+
+# Check if client accepts a given compression format
+function client_accepts_format(http::HTTP.Stream, format::String)::Bool
+    accept_encoding = HTTP.header(http, "Accept-Encoding", "")
+    # Empty header means only gzip is accepted (backwards compatibility)
+    if isempty(accept_encoding)
+        return format == "gzip"
+    end
+    return occursin(format, accept_encoding)
+end
+
+# Get content type based on file format
+function get_content_type(filepath::AbstractString)
+    file_format = detect_file_compression(filepath)
+
+    if file_format == "zstd"
+        return "application/x-zstd"
+    elseif file_format == "gzip"
+        return "application/x-gzip"
+    else
+        # Unknown or insufficient bytes - return generic octet-stream
+        return "application/octet-stream"
+    end
+end
+
 mutable struct RegistryMeta
     # Upstream registry URL (e.g. "https://github.com/JuliaRegistries/General")
     upstream_url::String
@@ -294,20 +337,30 @@ function handle_request(http::HTTP.Stream)
 
     # If the user asked for something that is an actual resource, send it directly
     if occursin(resource_re, resource)
-        # If the resource already exists locally, yay!  Serve it and quit.
+        # If the resource already exists locally, check if client can accept the format
         resource_path = resource_filepath(resource)
         io = try_open(resource_path)
         if io !== nothing
-            hit!(config.cache, resource[2:end])
-            serve_file(http, io, "application/x-gzip")
-            close(io)
-            return
+            cached_format = detect_file_compression(resource_path)
+
+            # Serve from cache if format is unknown or client accepts it
+            if cached_format === nothing || client_accepts_format(http, cached_format)
+                hit!(config.cache, resource[2:end])
+                content_type = get_content_type(resource_path)
+                serve_file(http, io, content_type)
+                close(io)
+                return
+            else
+                # Cached format not acceptable, close and re-fetch in desired format
+                close(io)
+                # Fall through to fetch_resource below
+            end
         end
 
         # If it doesn't exist locally, let's request a fetch on that resource.
         # This will return either `nothing` (e.g. resource does not exist) or
         # a `DownloadState` that represents a partial download.
-        dl_state = fetch_resource(resource, request_id)
+        dl_state = fetch_resource(resource, request_id, http)
         if dl_state !== nothing
             HTTP.setheader(http, "X-Cache-Miss" => "miss")
             stream_path = temp_resource_filepath(resource)
@@ -318,7 +371,8 @@ function handle_request(http::HTTP.Stream)
             # Try to serve `stream_path` file
             stream_io = try_open(stream_path)
             if stream_io !== nothing
-                serve_file(http, stream_io, "application/x-gzip";
+                content_type = get_content_type(stream_path)
+                serve_file(http, stream_io, content_type;
                            content_length=dl_state.content_length,
                            dl_task=dl_state.dl_task)
                 close(stream_io)
@@ -329,7 +383,8 @@ function handle_request(http::HTTP.Stream)
             # downloading since we last checked 20 lines ago.  Check again.
             io = try_open(resource_path)
             if io !== nothing
-                serve_file(http, io, "application/x-gzip")
+                content_type = get_content_type(resource_path)
+                serve_file(http, io, content_type)
                 close(io)
                 return
             end
@@ -377,7 +432,7 @@ function handle_request(http::HTTP.Stream)
     return
 end
 
-# precompilation                                                                                                                    
+# precompilation
 include(joinpath(dirname(@__DIR__), "deps", "precompile.jl"))
 if get(ENV, "PKGSERVER_GENERATING_PRECOMPILE", nothing) === nothing
     _precompile_()

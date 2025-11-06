@@ -257,20 +257,21 @@ Given a resource and a list of storage servers, return the storage server that r
 most quickly to a HEAD request for that storage server, as well as the HEAD response
 itself so that metadata such as the content-length of the resource can be inspected.
 """
-function select_server(resource::AbstractString, servers::Vector{<:AbstractString}; timeout = 5, retries = 2)
-    function head_req(server, resource)
+function select_server(resource::AbstractString, servers::Vector{<:AbstractString}, accept_encoding::AbstractString="gzip"; timeout = 5, retries = 2)
+    function head_req(server, resource, accept_encoding)
         @try_printerror begin
             response = HTTP.head(
                 string(server, resource);
                 status_exception = false,
                 timeout = timeout,
                 retries = retries,
+                headers = ["Accept-Encoding" => accept_encoding],
             )
             return server, response
         end
     end
     # Launch one task per server, performing a HEAD request
-    tasks = [@spawn head_req(server, resource) for server in servers]
+    tasks = [@spawn head_req(server, resource, accept_encoding) for server in servers]
 
     # Wait for the first Task that gives us an HTTP 200 OK, returning that server.
     # If none have it, we return `nothing`. :(
@@ -314,10 +315,24 @@ are recorded and future downloads of that same resource will be skipped, until
 `forget_failures()` is called.  The `DownloadState` object contains within it enough
 information to still serve a resource as it is being downloaded in the background task.
 """
-function fetch_resource(resource::AbstractString, request_id::AbstractString; servers::Vector{String}=config.storage_servers)
+function fetch_resource(resource::AbstractString, request_id::AbstractString, http::Union{HTTP.Stream,Nothing}=nothing; servers::Vector{String}=config.storage_servers)
     if isempty(servers)
         @error("fetch called with no servers", resource)
         error("fetch called with no servers")
+    end
+
+    # Determine what encoding to request from storage servers based on client preferences
+    # For backwards compatibility, if no Accept-Encoding header, default to gzip
+    if http !== nothing
+        client_accept = HTTP.header(http, "Accept-Encoding", "")
+        if isempty(client_accept)
+            accept_encoding = "gzip" # no header means gzip
+        else
+            accept_encoding = client_accept
+        end
+    else
+        # No client context, prefer zstd for storage efficiency
+        accept_encoding = "zstd, gzip"
     end
 
     # with_fetch_state() will wait for a lock
@@ -335,7 +350,7 @@ function fetch_resource(resource::AbstractString, request_id::AbstractString; se
         end
 
         # If not, let's figure out which storage server we're going to download from:
-        server, response = select_server(resource, servers)
+        server, response = select_server(resource, servers, accept_encoding)
         if response === nothing
             @debug("no upstream server", resource, servers)
             return nothing
@@ -343,7 +358,7 @@ function fetch_resource(resource::AbstractString, request_id::AbstractString; se
 
         # Launch download process in a separate task:
         dl_task = @async begin
-            success = download(server, resource, content_length(response), request_id)
+            success = download(server, resource, content_length(response), request_id, accept_encoding)
             lock(state.lock) do
                 if success
                     global fetch_hits += 1
@@ -422,8 +437,8 @@ function stream_file(io_in::IO, start_byte::Int, length::Int, dl_task::Task, io_
     return transmitted
 end
 
-function download(server::AbstractString, resource::AbstractString, content_length::Int, request_id::AbstractString)
-    @info("downloading resource", server, resource, request_id)
+function download(server::AbstractString, resource::AbstractString, content_length::Int, request_id::AbstractString, accept_encoding::AbstractString="gzip")
+    @info("downloading resource", server, resource, request_id, accept_encoding)
     t_start = time()
     hash = basename(resource)
 
@@ -465,6 +480,8 @@ function download(server::AbstractString, resource::AbstractString, content_leng
             req = HTTP.get(server * resource,
                 status_exception = false,
                 response_stream = file_io,
+                headers = ["Accept-Encoding" => accept_encoding],
+                decompress = false,
             )
             close(file_io)
             return req
