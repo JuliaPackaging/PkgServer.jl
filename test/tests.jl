@@ -104,7 +104,7 @@ end
 
     response = HTTP.get("$(server_url)/robots.txt")
     @test response.status == 200
-    @test chomp(String(response.body)) == "User-agent: * Disallow: /"
+    @test String(response.body) == "User-agent: *\nDisallow: /\n"
 
     # Ensure that some random URL gets a 404
     @test_throws HTTP.ExceptionRequest.StatusError HTTP.get("$(server_url)/docs")

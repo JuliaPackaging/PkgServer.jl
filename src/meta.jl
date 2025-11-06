@@ -244,5 +244,5 @@ function serve_parents(http::HTTP.Stream)
 end
 
 function serve_robots_txt(http::HTTP.Stream)
-    return serve_data(http, "User-agent: * Disallow: /\n", "text/plain")
+    return serve_data(http, "User-agent: *\nDisallow: /\n", "text/plain")
 end
