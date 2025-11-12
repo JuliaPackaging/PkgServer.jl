@@ -6,7 +6,8 @@ on:
   push:
     branches:
       - master
-    tags: '*'
+    tags:
+      - '*'
 jobs:
   all:
     name: all
@@ -36,17 +37,7 @@ jobs:
         with:
           version: ${{ matrix.julia-version }}
           arch: ${{ matrix.julia-arch }}
-      - name: Cache artifacts
-        uses: actions/cache@v2
-        env:
-          cache-name: cache-artifacts
-        with:
-          path: ~/.julia/artifacts
-          key: ${{ runner.os }}-test-${{ env.cache-name }}-${{ hashFiles('**/Project.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-test-${{ env.cache-name }}-
-            ${{ runner.os }}-test-
-            ${{ runner.os }}-
+      - uses: julia-actions/cache@v2
       - name: Setup Docker
         if: ${{ matrix.docker == 'true' }}
         env:
