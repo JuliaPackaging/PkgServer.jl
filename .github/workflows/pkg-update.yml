@@ -23,7 +23,7 @@ jobs:
           julia --project=. -e 'using Pkg; Pkg.status(; mode=PKGMODE_MANIFEST, diff=true)' >> $GITHUB_ENV
           echo 'EOF' >> $GITHUB_ENV
       - name: 'Create pull request'
-        uses: peter-evans/create-pull-request@v3
+        uses: peter-evans/create-pull-request@v7
         with:
           title: 'Automatic Pkg.update()'
           author: 'github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>'
