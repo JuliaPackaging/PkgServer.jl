@@ -26,6 +26,6 @@ function serve_artifact_toml(http::HTTP.Stream,
     HTTP.setheader(http, "Content-Length" => string(length(toml_string)))
     HTTP.setheader(http, "Content-Type" => "application/toml")
     HTTP.setheader(http, "Content-Disposition" => "attachment; filename=Artifacts.toml")
-    startwrite(http)
+    HTTP.startwrite(http)
     return write(http, toml_string)
 end

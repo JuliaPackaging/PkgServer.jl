@@ -1,6 +1,6 @@
 function handle_http_error(e)
     # If this is not an HTTP error at all, rethrow it immediately
-    if !isa(e, HTTP.Exceptions.HTTPError)
+    if !isa(e, HTTP.HTTPError)
         rethrow(e)
     end
 
@@ -9,10 +9,9 @@ function handle_http_error(e)
         return -Base.Libc.ECONNRESET
     end
 
-    # If it's a connection error, return the specific code, usually `ECONNREFUSED` or `EPIPE`
+    # If it's a connection error, return `-ECONNREFUSED`
     if isa(e, HTTP.ConnectError)
-        # TODO: Use ExceptionUnwrapping.jl documented API...
-        return e.error.ex.code
+        return -Base.Libc.ECONNREFUSED
     end
 
     # If it's none of the "whitelisted" errors, rethrow it.
@@ -27,7 +26,7 @@ function wait_for_server_liveness(server_url::String, resource::String = "regist
     while true
         # Try to get an HTTP 200 OK on /$(resource)
         response_code = try
-            HTTP.get("$(server_url)/$(resource)"; retry = false, readtimeout=1).status
+            HTTP.get("$(server_url)/$(resource)"; retry = false, request_timeout=1).status
         catch e
             handle_http_error(e)
         end
@@ -71,7 +70,9 @@ end
     @test endswith(eager_response.request.target, ".eager")
 
     # Test asking for that registry directly, unpacking it and verifying the treehash
-    mktemp() do tarball_path, tarball_io
+    # mktemp() do tarball_path, tarball_io
+    tarball_path, tarball_io = mktemp()
+    begin
         response = HTTP.get("$(server_url)/registry/$(registry_uuid)/$(registry_treehash)"; response_stream=tarball_io)
         close(tarball_io)
         @test response.status == 200
@@ -107,7 +108,7 @@ end
     @test String(response.body) == "User-agent: *\nDisallow: /\n"
 
     # Ensure that some random URL gets a 404
-    @test_throws HTTP.ExceptionRequest.StatusError HTTP.get("$(server_url)/docs")
+    @test_throws HTTP.StatusError HTTP.get("$(server_url)/docs")
 
     # Test a dynamically-generated artifact TOML
     art_tree_hash = "4ed4e6caa3c4559f34d9eafd2f42e9863f83b573"
@@ -148,7 +149,9 @@ end
 
             # Install something with platform-independent artifacts, so that we can check the hashes
             Pkg.add(Pkg.PackageSpec(;name="DotNET", version=v"0.1.0"))
-            Pkg.add(Pkg.PackageSpec(;name="FIGlet", version=v"0.2.1"))
+            # FIGlet@0.2.1 cannot be installed on Julia 1.12 since its BinaryProvider
+            # dependency does not resolve there.
+            # Pkg.add(Pkg.PackageSpec(;name="FIGlet", version=v"0.2.1"))
         end
         Base.Filesystem.prepare_for_deletion(temp_dir)
     end
@@ -180,8 +183,8 @@ end
         "4c0ca9eb-093a-5379-98c5-f87ac0bbbf44" => "ab2676a65345f8813be07675aa657464f98e6704",
         # DotNET
         "5091b313-875f-492b-8fe1-0f0d7d725ad8" => "58259eee27b838bfbf234cbfd043e3f090389f66",
-        # FIGlet
-        "3064a664-84fe-4d92-92c7-ed492f3d8fae" => "bfc6b52f75b4720581e3e49ae786da6764e65b6a"
+        # FIGlet (not installable on Julia 1.12, see above)
+        # "3064a664-84fe-4d92-92c7-ed492f3d8fae" => "bfc6b52f75b4720581e3e49ae786da6764e65b6a"
     ]
     for (uuid, treehash) in pkg_uuid_treehashes
         @test isfile(joinpath(cache_dir, "package", uuid, treehash))
@@ -190,8 +193,8 @@ end
     artifact_treehashes = [
         # DotNET clrbridge
         "5c005e142ebba033996dcc97b249e9e5ebcbf138",
-        # FIGlet fonts
-        "125ac0315d68bbb612f8c2189ea83401f73238f0",
+        # FIGlet fonts (not installable on Julia 1.12, see above)
+        # "125ac0315d68bbb612f8c2189ea83401f73238f0",
     ]
     for treehash in artifact_treehashes
         @test isfile(joinpath(cache_dir, "artifact", treehash))
@@ -213,19 +216,19 @@ end
     @test response.status == 200
     stats = JSON3.read(String(response.body))
     @test haskey(stats, "packages_cached")
-    @test stats["packages_cached"] >= 70
+    @test stats["packages_cached"] >= 60
     @test haskey(stats, "artifacts_cached")
     @test stats["artifacts_cached"] >= 30
 
-    # Find figlet fonts endpoint, hit it a couple of times, ensure that the LRU count goes up each time
-    figlet_fonts_resource = "artifact/125ac0315d68bbb612f8c2189ea83401f73238f0"
-    figlet_fonts_entry = stats["lru"][figlet_fonts_resource]
-    @test figlet_fonts_entry["num_accessed"] > 0
+    # Find the DotNET clrbridge endpoint, hit it a couple of times, ensure that the LRU count goes up each time
+    clrbridge_resource = "artifact/5c005e142ebba033996dcc97b249e9e5ebcbf138"
+    clrbridge_entry = stats["lru"][clrbridge_resource]
+    @test clrbridge_entry["num_accessed"] > 0
 
     # Now, hit this a couple more times.  We'll hit it a few more times now, while it's still streaming,
     # to trigger the streaming codepaths
     for idx in 1:5
-        HTTP.get("$(server_url)/$(figlet_fonts_resource)")
+        HTTP.get("$(server_url)/$(clrbridge_resource)")
     end
 
     # Refresh the stats
@@ -234,8 +237,8 @@ end
     stats = JSON3.read(String(response.body))
 
     # Ensure that the counter went up, and that the timing has advanced: (these are no longer true with nginx in the way)
-    #@test stats["lru"][figlet_fonts_resource]["num_accessed"] >= figlet_fonts_entry["num_accessed"] + 5
-    #@test stats["lru"][figlet_fonts_resource]["last_accessed"] > figlet_fonts_entry["last_accessed"]
+    #@test stats["lru"][clrbridge_resource]["num_accessed"] >= clrbridge_entry["num_accessed"] + 5
+    #@test stats["lru"][clrbridge_resource]["last_accessed"] > clrbridge_entry["last_accessed"]
 
     # Test that payload bytes received and transmitted are both nonzero,
     # and that (since we've served the same resources multiple times) the
@@ -398,7 +401,7 @@ end
             # TODO: Is there a better way to cancel a request?
             HTTP.get(
                 "$(auth_url)/admin/logs$(query)"; status_exception=false,
-                response_stream=io, retry=false, readtimeout=5,
+                response_stream=io, retry=false, read_idle_timeout=5,
             )
         catch err
             @assert err isa HTTP.TimeoutError
@@ -417,8 +420,9 @@ end
     logmsg = @async get_log_string()
     sleep(1)
     r = HTTP.get("$(server_url)/package/$(uuid)/$(treehash)")
-    sleep(1)
-    @test isfile(cachefile)
+    # The server moves the file into the cache asynchronously after the
+    # response has been streamed, so poll rather than racing it with a sleep
+    @test timedwait(() -> isfile(cachefile), 30) === :ok
     msg = fetch(logmsg)
     @test occursin("\e[36m\e[1mInfo: \e[22m\e[39mDeleting and pruning", msg)
     @test occursin("/package/$(uuid)/$(treehash)", msg)
@@ -429,8 +433,9 @@ end
     logmsg = @async get_log_string("?color=false")
     sleep(1)
     r = HTTP.get("$(server_url)/package/$(uuid)/$(treehash)")
-    sleep(1)
-    @test isfile(cachefile)
+    # The server moves the file into the cache asynchronously after the
+    # response has been streamed, so poll rather than racing it with a sleep
+    @test timedwait(() -> isfile(cachefile), 30) === :ok
     msg = fetch(logmsg)
     @test occursin("Info: Deleting and pruning", msg)
     @test occursin("/package/$(uuid)/$(treehash)", msg)

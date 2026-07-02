@@ -63,7 +63,7 @@ function handle_admin(http::HTTP.Stream)
         return simple_http_response(http, 404, msg)
     end
     # Check the Authorization header and extract username and token
-    auth = HTTP.header(http, "Authorization", "")
+    auth = HTTP.header(http.message, "Authorization", "")
     m = match(basic_auth_regex, auth)
     m === nothing && return invalid_auth(http)
     userinfo = String(Base64.base64decode(m.match::AbstractString))

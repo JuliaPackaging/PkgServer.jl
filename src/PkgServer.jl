@@ -115,9 +115,6 @@ end
 global config = ServerConfig()
 
 function __init__()
-    # Set default HTTP useragent
-    HTTP.setuseragent!("PkgServer (HTTP.jl)")
-
     # Record our starting time
     global time_start = now()
 end
@@ -182,16 +179,16 @@ function start(;kwargs...)
             end
         end
 
-        listen_server = Sockets.listen(config.listen_addr)
-        config.listen_server[] = listen_server
-        @info("server listening", config.listen_addr)
-        HTTP.listen(listen_server; max_connections=10) do http
+        listen_server = HTTP.listen!(string(config.listen_addr.host), config.listen_addr.port) do http
             Prometheus.@time REQUEST_TIMER[RequestLabels(http)] begin
                 Prometheus.@inprogress REQUEST_INPROGRESS begin
                     handle_request(http)
                 end
             end
         end
+        config.listen_server[] = listen_server
+        @info("server listening", config.listen_addr)
+        wait(listen_server)
     end # @sync
 end
 
@@ -199,7 +196,7 @@ function handle_request(http::HTTP.Stream)
     method = http.message.method
     uri = URIs.URI(http.message.target)
     resource = uri.path
-    request_id = HTTP.header(http, "X-Request-ID", "")
+    request_id = HTTP.header(http.message, "X-Request-ID", "")
 
     # Internal endpoint used by nginx to send a notification whenever it serves a file from
     # the file cache. The original request uri for the resource is given in the
@@ -208,7 +205,7 @@ function handle_request(http::HTTP.Stream)
     # could have been removed in the very small window between nginx opening the file and we
     # receiving the request here which is why we have some extra guards up).
     if resource == "/notify" && method == "GET"
-        original_uri = HTTP.header(http, "X-Original-URI")
+        original_uri = HTTP.header(http.message, "X-Original-URI")
         # This should always be true as long as the request comes from nginx
         if !occursin(resource_re, original_uri)
             HTTP.setstatus(http, 404)
@@ -273,8 +270,8 @@ function handle_request(http::HTTP.Stream)
         # out which registry flavor they actually want, and if none is given,
         # give them `conservative` by default, unless they are self-reporting
         # as a CI bot, in which case we'll always point them to `eager`.
-        ci = any(x -> occursin(r"=t$", x), split(HTTP.header(http, "Julia-CI-Variables", ""), ";"))
-        flavor = HTTP.header(http, "Julia-Registry-Preference", ci ? "eager" : "conservative")
+        ci = any(x -> occursin(r"=t$", x), split(HTTP.header(http.message, "Julia-CI-Variables", ""), ";"))
+        flavor = HTTP.header(http.message, "Julia-Registry-Preference", ci ? "eager" : "conservative")
         serve_redirect(http, "/registries.$(flavor)")
         return
     end
@@ -283,7 +280,7 @@ function handle_request(http::HTTP.Stream)
         filepath = joinpath(config.root, "static", basename(resource))
         if !isfile(filepath)
             HTTP.setstatus(http, 404)
-            startwrite(http)
+            HTTP.startwrite(http)
             return
         end
         open(filepath) do io
@@ -373,7 +370,7 @@ function handle_request(http::HTTP.Stream)
 
     global total_misses += 1
     HTTP.setstatus(http, 404)
-    startwrite(http)
+    HTTP.startwrite(http)
     return
 end
 

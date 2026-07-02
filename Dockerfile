@@ -1,5 +1,5 @@
 # Keep in sync with .github/workflows/(ci|pkg-update).yml
-FROM julia:1.10
+FROM julia:1.12
 #FROM julia:dev
 
 # This Dockerfile must be built with a context of the top-level PkgServer.jl directory
@@ -17,16 +17,11 @@ ENV JULIA_CPU_TARGET="generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,bas
 # While we're trying to debug issues, load in some helpful tools
 #RUN apt update && apt install -y gdb procps
 
-# Copy in Project.toml/Manifest.toml, instantiate immediately, so that we don't have to do this
-# every time we rebuild, since those files should change relatively slowly.
-ADD *.toml /app/
+# Copy in the full `PkgServer.jl` directory
+ADD . /app
+
+# Instantiate and precompile all dependencies as well as PkgServer itself
 RUN julia --project=/app -e "using Pkg; Pkg.instantiate(); Pkg.precompile()"
 
 # Our default command is to run the pkg server with the bundled `run_server.jl` script
 CMD ["julia", "--project=/app", "/app/bin/run_server.jl"]
-
-# Next, copy in full `PkgServer.jl` directory (this is the step that will most often be invalidated)
-ADD . /app
-
-# Precompile PkgServer
-RUN julia --project=/app -e "using PkgServer"

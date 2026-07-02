@@ -1,5 +1,26 @@
 # Utilities to deal with fetching/serving actual Pkg resources
 
+# Shared client for all outgoing requests, giving connection reuse across
+# requests and default headers. OncePerProcess constructs the client once per
+# process, so a client used during precompilation (`ServerConfig()` runs at
+# module top level and reaches out to the network) is never carried over into
+# the runtime process.
+const http_client = Base.OncePerProcess{HTTP.Client}() do
+    HTTP.Client(
+        default_headers = ["User-Agent" => "PkgServer (HTTP.jl)"],
+        # Abort any outgoing request that sits completely silent: a healthy
+        # storage server never goes 10s without sending headers or another
+        # chunk of body bytes. Total transfer time stays unbounded, so this
+        # cannot hurt slow-but-progressing downloads, but it does bound how
+        # long a wedged upstream connection can stall clients streaming a
+        # cache miss. (`connect_timeout` cannot be configured here, see
+        # https://github.com/JuliaWeb/HTTP.jl -- the per-request default
+        # always overrides it; the probes in `select_server` set their own.)
+        response_header_timeout = 10,
+        read_idle_timeout = 10,
+    )
+end
+
 const uuid_re = raw"[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}(?-i)"
 const hash_re = raw"[0-9a-f]{40}"
 const registry_re = Regex("^/registry/($uuid_re)/($hash_re)\$")
@@ -18,7 +39,7 @@ latest treehash.
 """
 function get_registries(server::AbstractString, dotflavor::AbstractString)
     regs = Dict{String,String}()
-    response = HTTP.get("$server/registries$(dotflavor)", status_exception = false)
+    response = HTTP.get(http_client(), "$server/registries$(dotflavor)", status_exception = false)
     if response.status != 200
         @error("Failure to fetch /registries$(dotflavor)", server, response.status)
         return regs
@@ -113,7 +134,7 @@ end
 Send a `HEAD` request to the specified URL, returns `true` if the response is HTTP 200.
 """
 function url_exists(url::AbstractString)
-    response = HTTP.request("HEAD", url, status_exception = false)
+    response = HTTP.request(http_client(), "HEAD", url, status_exception = false)
     response.status == 200
 end
 
@@ -259,14 +280,27 @@ itself so that metadata such as the content-length of the resource can be inspec
 """
 function select_server(resource::AbstractString, servers::Vector{<:AbstractString}; timeout = 5, retries = 2)
     function head_req(server, resource)
-        @try_printerror begin
+        t_start = time()
+        try
+            # Bound the connection and header phases individually rather than
+            # setting a whole-exchange deadline: when a cache-miss burst fires
+            # many concurrent probes, a hard deadline makes the slowest ones
+            # fail outright, whereas a slow probe should just lose the race in
+            # `select_server` (retries also get room to run this way).
             response = HTTP.head(
+                http_client(),
                 string(server, resource);
                 status_exception = false,
-                timeout = timeout,
+                connect_timeout = timeout,
+                response_header_timeout = timeout,
                 retries = retries,
             )
+            @debug("storage probe", server, resource, status=response.status,
+                   retry_attempts=HTTP.retry_attempts(response), elapsed=(time() - t_start))
             return server, response
+        catch err
+            @warn("storage server probe failed", server, resource, err, elapsed=(time() - t_start))
+            return nothing
         end
     end
     # Launch one task per server, performing a HEAD request
@@ -277,23 +311,28 @@ function select_server(resource::AbstractString, servers::Vector{<:AbstractStrin
     while !isempty(tasks)
         next_task = wait_first(tasks...)
         deleteat!(tasks, findfirst(t -> t == next_task, tasks))
-        @try_printerror begin
-            server, http_response = fetch(next_task)
-            if http_response.status == 200
-                return server, http_response
-            end
+        # `head_req` catches all exceptions and returns `nothing`, so the task
+        # should never fail, but guard the `fetch` so that an unexpected task
+        # failure degrades to "server unavailable" rather than propagating.
+        result = try
+            fetch(next_task)
+        catch err
+            @error("storage probe task failed", resource, err)
+            nothing
+        end
+        result === nothing && continue
+        server, http_response = result
+        if http_response.status == 200
+            return server, http_response
         end
     end
     return nothing, nothing
 end
 
-function content_length(resp::HTTP.Messages.Response)
-    for h in resp.headers
-        if lowercase(h[1]) == "content-length"
-            return parse(Int, h[2])
-        end
-    end
-    return nothing
+function content_length(resp::HTTP.Response)
+    cl = HTTP.header(resp, "Content-Length")
+    isempty(cl) && return nothing
+    return parse(Int, cl)
 end
 
 function resource_is_downloading(resource::AbstractString)
@@ -324,7 +363,7 @@ function fetch_resource(resource::AbstractString, request_id::AbstractString; se
     with_fetch_state(resource) do state
         # check if this has failed to download recently
         if resource in state.failed
-            @debug("skipping recently failed download", resource)
+            @warn("skipping recently failed download", resource, request_id)
             return nothing
         end
 
@@ -337,13 +376,23 @@ function fetch_resource(resource::AbstractString, request_id::AbstractString; se
         # If not, let's figure out which storage server we're going to download from:
         server, response = select_server(resource, servers)
         if response === nothing
-            @debug("no upstream server", resource, servers)
+            @warn("no upstream server", resource, servers, request_id)
             return nothing
         end
 
         # Launch download process in a separate task:
         dl_task = @async begin
-            success = download(server, resource, content_length(response), request_id)
+            # `download` rethrows transport-level failures (e.g. a stalled
+            # connection hitting the client's `read_idle_timeout`); treat those
+            # as a failed download instead of dying here, since dying would
+            # skip the cleanup below and leave the resource stuck in
+            # `state.inprogress` forever.
+            success = try
+                download(server, resource, content_length(response), request_id)
+            catch err
+                @warn("download errored", server, resource, request_id, err)
+                false
+            end
             lock(state.lock) do
                 if success
                     global fetch_hits += 1
@@ -462,7 +511,7 @@ function download(server::AbstractString, resource::AbstractString, content_leng
 
         # Initiate the HTTP request, and start the data flowing into the file
         http_task = @async begin
-            req = HTTP.get(server * resource,
+            req = HTTP.get(http_client(), server * resource,
                 status_exception = false,
                 response_stream = file_io,
             )
@@ -482,7 +531,7 @@ function download(server::AbstractString, resource::AbstractString, content_leng
         # Raise warnings about bad HTTP response codes
         response = fetch(http_task)
         if response.status != 200
-            @warn "response status $(response.status)"
+            @warn("download failed", server, resource, status=response.status, request_id)
             return false
         end
         bytes_received = filesize(temp_file)
@@ -532,7 +581,7 @@ function serve_file(http::HTTP.Stream,
     stopbyte = content_length - 1
 
     # Support single byte ranges
-    range_string = HTTP.header(http, "Range")
+    range_string = HTTP.header(http.message, "Range")
     if !isempty(range_string)
         # Look for the following patterns: "bytes=a-b", "bytes=a-", and "bytes=-b".
         # Empty captures will fail tryparse and then be replaced with the correct endpoints.
@@ -569,7 +618,7 @@ function serve_file(http::HTTP.Stream,
     if content_encoding != "identity"
         HTTP.setheader(http, "Content-Encoding" => content_encoding)
     end
-    startwrite(http)
+    HTTP.startwrite(http)
 
     # Account this hit
     global total_hits += 1

@@ -144,7 +144,7 @@ end
 function serve_data(http::HTTP.Stream, msg, content_type)
     HTTP.setheader(http, "Content-Length" => string(length(msg)))
     HTTP.setheader(http, "Content-Type" => content_type)
-    startwrite(http)
+    HTTP.startwrite(http)
     if http.message.method == "GET"
         written_bytes = write(http, msg)
         Prometheus.inc(BYTES_TRANSMITTED, written_bytes)

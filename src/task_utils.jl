@@ -54,7 +54,13 @@ function wait_first(args...)
     c = Channel()
     for arg in args
         @async begin
-            wait(arg)
+            # A failed Task makes `wait` throw; it is still "ready" and must be
+            # delivered, otherwise `take!` blocks forever when every remaining
+            # waitable has failed.
+            try
+                wait(arg)
+            catch
+            end
             put!(c, arg)
         end
     end
