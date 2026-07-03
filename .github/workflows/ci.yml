@@ -30,11 +30,11 @@ jobs:
           - 'true'
           - 'false'
     steps:
-      - uses: actions/checkout@v6
-      - uses: julia-actions/setup-julia@v2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3.0.2
         with:
           version: ${{ matrix.julia-version }}
-      - uses: julia-actions/cache@v2
+      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3.1.0
       - name: Setup Docker
         if: ${{ matrix.docker == 'true' }}
         env:
@@ -49,8 +49,7 @@ jobs:
           (make -C deployment logs &)
           echo "JULIA_PKG_SERVER=http://127.0.0.1:8000" >> ${GITHUB_ENV}
           echo "JULIA_PKG_SERVER_STORAGE_ROOT=$(pwd)/deployment/storage" >> ${GITHUB_ENV}
-      - uses: julia-actions/julia-buildpkg@latest
-      - uses: julia-actions/julia-runtest@latest
+      - uses: julia-actions/julia-runtest@6e050c8013b833b1195105ff2fce9cd802f53271 # v1.12.0
       - name: Startup time test
         run: |
           julia --project bin/startup_time.jl
@@ -63,7 +62,7 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: docker login
         run: echo "${DOCKER_PASSWORD}" | docker login --username "${DOCKER_USERNAME}" --password-stdin
         env:
