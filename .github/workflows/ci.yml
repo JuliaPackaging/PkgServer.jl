@@ -23,11 +23,9 @@ jobs:
       matrix:
         # Keep in sync with pkg-update.yml and the Dockerfile
         julia-version:
-          - "1.10"
+          - "1.12"
         os:
           - ubuntu-latest
-        julia-arch:
-          - x64
         docker:
           - 'true'
           - 'false'
@@ -36,7 +34,6 @@ jobs:
       - uses: julia-actions/setup-julia@v2
         with:
           version: ${{ matrix.julia-version }}
-          arch: ${{ matrix.julia-arch }}
       - uses: julia-actions/cache@v2
       - name: Setup Docker
         if: ${{ matrix.docker == 'true' }}
