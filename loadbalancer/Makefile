@@ -75,6 +75,9 @@ up: $(DIRS) build/loadbalancer.nginx.conf
 down:
 	docker compose down --remove-orphans
 
+pull:
+	docker compose pull
+
 # Rule to install logrotate configuration so that host-wide logrotate can
 # perform the logrotations, as well as run `make nginx-send-usr1`.
 /etc/logrotate.d/loadbalancer: ../deployment/conf/logrotate.conf
