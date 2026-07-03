@@ -5,7 +5,7 @@ using HTTP, JSON3, Scratch, TimeZones, Dates, Tar, Gzip_jll
 # Get list of Pkg servers
 pkg_servers = JSON3.read(String(HTTP.get("https://pkg.julialang.org/meta/siblings").body))
 #storage_servers = JSON3.read(String(HTTP.get("https://pkg.julialang.org/meta/parents").body))
-storage_servers = ["https://us-east.storage.julialang.org", "https://kr.storage.julialang.org"]
+storage_servers = ["https://us-east.storage.juliahub.com", "https://kr.storage.juliahub.com"]
 
 function update_git_repo(repo_url::AbstractString, repo_path::AbstractString; branch::AbstractString = "master")
     mkpath(repo_path)
