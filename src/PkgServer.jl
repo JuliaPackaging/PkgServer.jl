@@ -64,8 +64,8 @@ struct ServerConfig
                                 RegistryMeta("https://github.com/JuliaRegistries/General")
                             ),
                             storage_servers = [
-                                "https://us-east.storage.juliahub.com",
-                                "https://kr.storage.juliahub.com",
+                                "https://us-east.storage.julialang.org",
+                                "https://kr.storage.julialang.org",
                             ],
                             dotflavors = [
                                 ".eager",
