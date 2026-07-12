@@ -59,9 +59,9 @@ version = "1.14.0+0"
 
 [[deps.HTTP]]
 deps = ["Base64", "CodecZlib", "Dates", "EnumX", "PrecompileTools", "Random", "Reseau", "SHA", "URIs", "UUIDs", "Zlib_jll"]
-git-tree-sha1 = "320920333c19358c3115a42b10f03abd9f261748"
+git-tree-sha1 = "c2c808326222b6dc4bec295a83b55f79aeec98e0"
 uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
-version = "2.5.3"
+version = "2.5.5"
 
 [[deps.JLLWrappers]]
 deps = ["Artifacts", "Preferences"]
@@ -189,9 +189,9 @@ version = "1.11.0"
 
 [[deps.Prometheus]]
 deps = ["CodecZlib", "HTTP", "SimpleBufferStream"]
-git-tree-sha1 = "b3b2aea42478b5f138699e1e9b2cfa1d8ecf35ba"
+git-tree-sha1 = "78c0f3e4fedb5d1f7cac61222e493dedac1f4db4"
 uuid = "f25c1797-fe98-4e0c-b252-1b4fe3b6bde6"
-version = "1.5.0"
+version = "1.5.1"
 
 [[deps.Random]]
 deps = ["SHA"]
